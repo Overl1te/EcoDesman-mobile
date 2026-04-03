@@ -1,0 +1,29 @@
+import "package:dio/dio.dart";
+import "package:flutter_riverpod/flutter_riverpod.dart";
+
+import "api_client.dart";
+
+final imageUploadServiceProvider = Provider<ImageUploadService>((ref) {
+  return ImageUploadService(ref.watch(apiClientProvider));
+});
+
+class ImageUploadService {
+  ImageUploadService(this._dio);
+
+  final Dio _dio;
+
+  Future<String> uploadImage(String filePath) async {
+    final fileName = filePath.split(RegExp(r"[\\\\/]")).last;
+    final formData = FormData.fromMap({
+      "file": await MultipartFile.fromFile(filePath, filename: fileName),
+    });
+
+    final response = await _dio.post(
+      "/uploads/images",
+      data: formData,
+      options: Options(contentType: "multipart/form-data"),
+    );
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return data["url"] as String;
+  }
+}

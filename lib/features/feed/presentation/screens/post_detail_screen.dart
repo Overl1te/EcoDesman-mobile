@@ -1,0 +1,725 @@
+import "package:flutter/material.dart";
+import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:go_router/go_router.dart";
+
+import "../../../../core/network/error_message.dart";
+import "../../../../core/utils/date_formatter.dart";
+import "../../../../shared/widgets/app_error_state.dart";
+import "../../../../shared/widgets/remote_avatar.dart";
+import "../../../auth/presentation/controllers/auth_controller.dart";
+import "../../../profile/presentation/controllers/profile_controller.dart";
+import "../../domain/models/post_comment.dart";
+import "../../domain/models/post_details.dart";
+import "../controllers/feed_controller.dart";
+import "post_images_viewer_screen.dart";
+
+class PostDetailScreen extends ConsumerStatefulWidget {
+  const PostDetailScreen({super.key, required this.postId});
+
+  final int postId;
+
+  @override
+  ConsumerState<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
+  final _commentController = TextEditingController();
+  bool _isSendingComment = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _invalidateAuthorCaches(int authorId) {
+    ref.invalidate(userPostsProvider(authorId));
+    ref.invalidate(publicProfileProvider(authorId));
+  }
+
+  Future<void> _toggleLike(PostDetails post) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы ставить лайки");
+      return;
+    }
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .toggleLike();
+      _invalidateAuthorCaches(post.author.id);
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(error, fallback: "Не удалось обновить лайк"),
+      );
+    }
+  }
+
+  Future<void> _toggleFavorite(PostDetails post) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы добавлять публикации в избранное");
+      return;
+    }
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .toggleFavorite();
+      _invalidateAuthorCaches(post.author.id);
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(error, fallback: "Не удалось обновить избранное"),
+      );
+    }
+  }
+
+  Future<void> _submitComment(PostDetails post) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы комментировать");
+      return;
+    }
+
+    final text = _commentController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isSendingComment = true;
+    });
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .addComment(text);
+      _commentController.clear();
+      _invalidateAuthorCaches(post.author.id);
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(
+          error,
+          fallback: "Не удалось отправить комментарий",
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingComment = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _editComment(PostDetails post, PostComment comment) async {
+    final controller = TextEditingController(text: comment.body);
+    final nextBody = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Редактировать комментарий"),
+          content: TextField(
+            controller: controller,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(border: OutlineInputBorder()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Отмена"),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text("Сохранить"),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    if (nextBody == null || nextBody.isEmpty || nextBody == comment.body) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .updateComment(commentId: comment.id, body: nextBody);
+      _invalidateAuthorCaches(post.author.id);
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(
+          error,
+          fallback: "Не удалось обновить комментарий",
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteComment(PostDetails post, PostComment comment) async {
+    final shouldDelete =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text("Удалить комментарий?"),
+              content: const Text(
+                "Комментарий будет удален без возможности восстановления.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text("Отмена"),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text("Удалить"),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .deleteComment(comment.id);
+      _invalidateAuthorCaches(post.author.id);
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(error, fallback: "Не удалось удалить комментарий"),
+      );
+    }
+  }
+
+  Future<void> _onMenuAction(String value, PostDetails post) async {
+    switch (value) {
+      case "edit":
+        await context.push("/posts/${post.id}/edit");
+        _invalidateAuthorCaches(post.author.id);
+        break;
+      case "delete":
+        final shouldDelete =
+            await showDialog<bool>(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: const Text("Удалить пост?"),
+                  content: const Text("Это действие нельзя отменить."),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text("Отмена"),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text("Удалить"),
+                    ),
+                  ],
+                );
+              },
+            ) ??
+            false;
+        if (!shouldDelete) {
+          return;
+        }
+        await ref
+            .read(postDetailsControllerProvider(widget.postId).notifier)
+            .deletePost();
+        _invalidateAuthorCaches(post.author.id);
+        if (mounted) {
+          context.pop();
+        }
+        break;
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+    final postAsync = ref.watch(postDetailsControllerProvider(widget.postId));
+    final theme = Theme.of(context);
+
+    ref.listen<AsyncValue<PostDetails>>(
+      postDetailsControllerProvider(widget.postId),
+      (previous, next) {
+        next.whenData((post) {
+          ref.read(feedControllerProvider.notifier).upsertPost(post);
+        });
+      },
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Публикация"),
+        actions: postAsync.maybeWhen(
+          data: (post) {
+            if (!post.canEdit) {
+              return const [];
+            }
+
+            return [
+              PopupMenuButton<String>(
+                onSelected: (value) => _onMenuAction(value, post),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: "edit", child: Text("Редактировать")),
+                  PopupMenuItem(value: "delete", child: Text("Удалить")),
+                ],
+              ),
+            ];
+          },
+          orElse: () => const [],
+        ),
+      ),
+      body: postAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) {
+          return AppErrorState(
+            title: "Не удалось открыть пост",
+            message: "Попробуйте снова чуть позже.",
+            onRetry: () {
+              ref.invalidate(postDetailsControllerProvider(widget.postId));
+            },
+          );
+        },
+        data: (post) {
+          return RefreshIndicator(
+            onRefresh: () => ref
+                .read(postDetailsControllerProvider(widget.postId).notifier)
+                .refreshPost(),
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                if (!post.isPublished) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      "Черновик: пост пока не опубликован в общей ленте.",
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                InkWell(
+                  onTap: () => context.push("/profiles/${post.author.id}"),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RemoteAvatar(
+                        imageUrl: post.author.avatarUrl,
+                        fallbackLabel: post.author.displayName,
+                        radius: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.author.displayName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              formatPostDate(post.publishedAt),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (post.author.statusText.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                post.author.statusText,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (post.title.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    post.title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                if (post.isEvent) ...[
+                  const SizedBox(height: 16),
+                  _EventInfoCard(post: post),
+                ],
+                const SizedBox(height: 16),
+                Text(
+                  post.body,
+                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                ),
+                if (post.images.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  for (var index = 0; index < post.images.length; index++) ...[
+                    InkWell(
+                      onTap: () => openPostImagesViewer(
+                        context,
+                        imageUrls: [
+                          for (final item in post.images) item.imageUrl,
+                        ],
+                        initialIndex: index,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.network(
+                          post.images[index].imageUrl,
+                          width: double.infinity,
+                          height: 240,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 240,
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image_outlined),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: () => _toggleLike(post),
+                      icon: Icon(
+                        post.isLiked ? Icons.favorite : Icons.favorite_border,
+                      ),
+                      label: Text("${post.likesCount} лайков"),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _toggleFavorite(post),
+                      icon: Icon(
+                        post.isFavorited
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                      ),
+                      label: Text("${post.favoritesCount} в избранном"),
+                    ),
+                    _MetricChip(
+                      icon: Icons.chat_bubble_outline,
+                      label: "${post.commentsCount} комментариев",
+                    ),
+                    _MetricChip(
+                      icon: Icons.visibility_outlined,
+                      label: "${post.viewCount} просмотров",
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Комментарии",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (post.comments.isEmpty)
+                        Text(
+                          "Пока комментариев нет. Будьте первым.",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      else
+                        Column(
+                          children: [
+                            for (final comment in post.comments) ...[
+                              _CommentTile(
+                                comment: comment,
+                                onAuthorTap: () => context.push(
+                                  "/profiles/${comment.author.id}",
+                                ),
+                                onEdit: comment.canEdit
+                                    ? () => _editComment(post, comment)
+                                    : null,
+                                onDelete: comment.canEdit
+                                    ? () => _deleteComment(post, comment)
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                          ],
+                        ),
+                      const SizedBox(height: 8),
+                      if (authState.isAuthenticated) ...[
+                        TextField(
+                          controller: _commentController,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: "Ваш комментарий",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.icon(
+                            onPressed: _isSendingComment
+                                ? null
+                                : () => _submitComment(post),
+                            icon: _isSendingComment
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.send),
+                            label: const Text("Отправить"),
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: () => context.go("/login"),
+                          child: const Text("Войти, чтобы комментировать"),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EventInfoCard extends StatelessWidget {
+  const _EventInfoCard({required this.post});
+
+  final PostDetails post;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.event_available_outlined,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  formatEventRange(post.eventStartsAt, post.eventEndsAt),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (post.eventLocation.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.place_outlined,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    post.eventLocation,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      side: BorderSide.none,
+    );
+  }
+}
+
+class _CommentTile extends StatelessWidget {
+  const _CommentTile({
+    required this.comment,
+    required this.onAuthorTap,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  final PostComment comment;
+  final VoidCallback onAuthorTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onAuthorTap,
+            borderRadius: BorderRadius.circular(18),
+            child: RemoteAvatar(
+              imageUrl: comment.author.avatarUrl,
+              fallbackLabel: comment.author.displayName,
+              radius: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: onAuthorTap,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            comment.author.displayName,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      formatPostDate(comment.createdAt),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (onEdit != null || onDelete != null)
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == "edit") {
+                            onEdit?.call();
+                          }
+                          if (value == "delete") {
+                            onDelete?.call();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (onEdit != null)
+                            const PopupMenuItem(
+                              value: "edit",
+                              child: Text("Редактировать"),
+                            ),
+                          if (onDelete != null)
+                            const PopupMenuItem(
+                              value: "delete",
+                              child: Text("Удалить"),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  comment.body,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
