@@ -32,6 +32,8 @@ class AppNotification {
     required this.actor,
     required this.postId,
     required this.commentId,
+    required this.supportThreadId,
+    required this.reportId,
   });
 
   final int id;
@@ -43,6 +45,8 @@ class AppNotification {
   final NotificationActor actor;
   final int? postId;
   final int? commentId;
+  final int? supportThreadId;
+  final int? reportId;
 
   AppNotification copyWith({bool? isRead}) {
     return AppNotification(
@@ -55,6 +59,8 @@ class AppNotification {
       actor: actor,
       postId: postId,
       commentId: commentId,
+      supportThreadId: supportThreadId,
+      reportId: reportId,
     );
   }
 
@@ -71,6 +77,8 @@ class AppNotification {
       ),
       postId: json["post_id"] as int?,
       commentId: json["comment_id"] as int?,
+      supportThreadId: json["support_thread_id"] as int?,
+      reportId: json["report_id"] as int?,
     );
   }
 }

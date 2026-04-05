@@ -14,6 +14,7 @@ class RoleChip extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       backgroundColor: switch (role) {
         "admin" => theme.colorScheme.errorContainer,
+        "support" => theme.colorScheme.primaryContainer,
         "moderator" => theme.colorScheme.secondaryContainer,
         _ => theme.colorScheme.surfaceContainerHighest,
       },
@@ -25,6 +26,8 @@ class RoleChip extends StatelessWidget {
     switch (role) {
       case "admin":
         return "Админ";
+      case "support":
+        return "Техподдержка";
       case "moderator":
         return "Модератор";
       default:

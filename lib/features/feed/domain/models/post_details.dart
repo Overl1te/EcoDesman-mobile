@@ -22,9 +22,12 @@ class PostDetails {
     required this.isOwner,
     required this.canEdit,
     required this.isPublished,
+    required this.eventDate,
     required this.eventStartsAt,
     required this.eventEndsAt,
     required this.eventLocation,
+    required this.isEventCancelled,
+    required this.eventCancelledAt,
   });
 
   final int id;
@@ -45,9 +48,12 @@ class PostDetails {
   final bool isOwner;
   final bool canEdit;
   final bool isPublished;
+  final DateTime? eventDate;
   final DateTime? eventStartsAt;
   final DateTime? eventEndsAt;
   final String eventLocation;
+  final bool isEventCancelled;
+  final DateTime? eventCancelledAt;
 
   bool get isEvent => kind == "event";
 
@@ -69,9 +75,12 @@ class PostDetails {
     bool? isOwner,
     bool? canEdit,
     bool? isPublished,
+    DateTime? eventDate,
     DateTime? eventStartsAt,
     DateTime? eventEndsAt,
     String? eventLocation,
+    bool? isEventCancelled,
+    DateTime? eventCancelledAt,
   }) {
     return PostDetails(
       id: id,
@@ -92,9 +101,12 @@ class PostDetails {
       isOwner: isOwner ?? this.isOwner,
       canEdit: canEdit ?? this.canEdit,
       isPublished: isPublished ?? this.isPublished,
+      eventDate: eventDate ?? this.eventDate,
       eventStartsAt: eventStartsAt ?? this.eventStartsAt,
       eventEndsAt: eventEndsAt ?? this.eventEndsAt,
       eventLocation: eventLocation ?? this.eventLocation,
+      isEventCancelled: isEventCancelled ?? this.isEventCancelled,
+      eventCancelledAt: eventCancelledAt ?? this.eventCancelledAt,
     );
   }
 
@@ -130,9 +142,12 @@ class PostDetails {
       isOwner: json["is_owner"] as bool? ?? false,
       canEdit: json["can_edit"] as bool? ?? false,
       isPublished: json["is_published"] as bool? ?? true,
+      eventDate: _parseDateTime(json["event_date"]),
       eventStartsAt: _parseDateTime(json["event_starts_at"]),
       eventEndsAt: _parseDateTime(json["event_ends_at"]),
       eventLocation: json["event_location"] as String? ?? "",
+      isEventCancelled: json["is_event_cancelled"] as bool? ?? false,
+      eventCancelledAt: _parseDateTime(json["event_cancelled_at"]),
     );
   }
 }

@@ -50,6 +50,24 @@ class ProfileScreen extends ConsumerWidget {
                 onPressed: () => context.go("/login"),
                 child: const Text("Войти в аккаунт"),
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => context.push("/profile/help"),
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text("Справка"),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push("/profile/support"),
+                    icon: const Icon(Icons.support_agent_outlined),
+                    label: const Text("Помощь"),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -96,6 +114,32 @@ class ProfileScreen extends ConsumerWidget {
               title: const Text("Избранное"),
               subtitle: const Text(
                 "Сохраненные публикации теперь открываются из профиля.",
+              ),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              onTap: () => context.push("/profile/help"),
+              leading: const CircleAvatar(child: Icon(Icons.info_outline)),
+              title: const Text("Справка"),
+              subtitle: const Text(
+                "О проекте, разработчиках, правилах сервиса и юридических документах.",
+              ),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              onTap: () => context.push("/profile/support"),
+              leading: const CircleAvatar(
+                child: Icon(Icons.support_agent_outlined),
+              ),
+              title: const Text("Помощь"),
+              subtitle: const Text(
+                "????????????, ???? ? ??????????, FAQ ? ??????? ?????.",
               ),
               trailing: const Icon(Icons.chevron_right),
             ),

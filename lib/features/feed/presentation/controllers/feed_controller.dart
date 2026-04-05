@@ -188,9 +188,12 @@ class PostsCollectionController extends AsyncNotifier<FeedState> {
       hasImages: post.hasImages,
       isOwner: post.isOwner,
       canEdit: post.canEdit,
+      eventDate: post.eventDate,
       eventStartsAt: post.eventStartsAt,
       eventEndsAt: post.eventEndsAt,
       eventLocation: post.eventLocation,
+      isEventCancelled: post.isEventCancelled,
+      eventCancelledAt: post.eventCancelledAt,
     );
 
     final hasPost = current.items.any((item) => item.id == post.id);
@@ -370,6 +373,21 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
     state = AsyncData(post);
     ref.read(feedControllerProvider.notifier).upsertPost(post);
     _invalidateCoreCollections(post);
+  }
+
+  Future<void> setEventCancelled(bool isCancelled) async {
+    final current = state.asData?.value;
+    final authState = ref.read(authControllerProvider);
+    if (current == null || !authState.isAuthenticated || !current.isEvent) {
+      return;
+    }
+
+    final updated = await ref
+        .read(postsRepositoryProvider)
+        .setEventCancelled(postId: postId, isCancelled: isCancelled);
+    state = AsyncData(updated);
+    ref.read(feedControllerProvider.notifier).upsertPost(updated);
+    _invalidateCoreCollections(updated);
   }
 
   Future<void> deletePost() async {

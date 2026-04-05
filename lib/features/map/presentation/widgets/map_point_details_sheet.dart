@@ -1,9 +1,13 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:go_router/go_router.dart";
 import "package:intl/intl.dart";
 
 import "../../../../core/network/error_message.dart";
+import "../../../auth/presentation/controllers/auth_controller.dart";
 import "../../../feed/presentation/screens/post_images_viewer_screen.dart";
+import "../../../support/data/repositories/support_repository_impl.dart";
+import "../../../support/presentation/widgets/report_content_sheet.dart";
 import "../../data/repositories/map_repository_impl.dart";
 import "../../domain/models/eco_map_category.dart";
 import "../../domain/models/eco_map_point_detail.dart";
@@ -87,6 +91,60 @@ class _MapPointDetailsSheetState extends ConsumerState<MapPointDetailsSheet> {
           _isSubmittingReview = false;
         });
       }
+    }
+  }
+
+  Future<void> _reportReview(EcoMapPointReview review) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Войдите, чтобы отправить жалобу")),
+      );
+      return;
+    }
+
+    final input = await showSupportReportSheet(
+      context,
+      title: "Пожаловаться на отзыв",
+      subtitle:
+          "Жалоба попадёт в техподдержку и будет привязана к отдельному чату.",
+    );
+    if (!mounted || input == null) {
+      return;
+    }
+
+    try {
+      final report = await ref
+          .read(supportRepositoryProvider)
+          .createMapReviewReport(
+            pointId: widget.pointId,
+            reviewId: review.id,
+            reason: input.reason,
+            details: input.details,
+          );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Жалоба отправлена")));
+      if (report.threadId != null) {
+        context.push("/profile/support/thread/${report.threadId}");
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            humanizeNetworkError(
+              error,
+              fallback: "Не удалось отправить жалобу",
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -317,7 +375,12 @@ class _MapPointDetailsSheetState extends ConsumerState<MapPointDetailsSheet> {
                     Column(
                       children: [
                         for (final review in point.reviews) ...[
-                          _ReviewCard(review: review),
+                          _ReviewCard(
+                            review: review,
+                            onReport: !review.isOwner
+                                ? () => _reportReview(review)
+                                : null,
+                          ),
                           const SizedBox(height: 12),
                         ],
                       ],
@@ -576,9 +639,10 @@ class _CategoryPill extends StatelessWidget {
 }
 
 class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({required this.review});
+  const _ReviewCard({required this.review, this.onReport});
 
   final EcoMapPointReview review;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -610,6 +674,12 @@ class _ReviewCard extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (onReport != null)
+                IconButton(
+                  onPressed: onReport,
+                  tooltip: "Пожаловаться",
+                  icon: const Icon(Icons.flag_outlined, size: 20),
+                ),
             ],
           ),
           const SizedBox(height: 8),

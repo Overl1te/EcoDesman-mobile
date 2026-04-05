@@ -1,5 +1,6 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
+import "../../../events/domain/models/event_calendar_month.dart";
 import "../../domain/models/favorite_state.dart";
 import "../../domain/models/like_state.dart";
 import "../../domain/models/paginated_posts.dart";
@@ -33,6 +34,14 @@ class PostsRepositoryImpl implements PostsRepository {
     int page = 1,
   }) {
     return _remoteDataSource.fetchPosts(query: query, page: page);
+  }
+
+  @override
+  Future<EventCalendarMonth> fetchEventCalendar({
+    required int year,
+    required int month,
+  }) {
+    return _remoteDataSource.fetchEventCalendar(year: year, month: month);
   }
 
   @override
@@ -92,6 +101,17 @@ class PostsRepositoryImpl implements PostsRepository {
     required PostWriteInput input,
   }) {
     return _remoteDataSource.updatePost(postId: postId, input: input);
+  }
+
+  @override
+  Future<PostDetails> setEventCancelled({
+    required int postId,
+    required bool isCancelled,
+  }) {
+    return _remoteDataSource.setEventCancelled(
+      postId: postId,
+      isCancelled: isCancelled,
+    );
   }
 
   @override

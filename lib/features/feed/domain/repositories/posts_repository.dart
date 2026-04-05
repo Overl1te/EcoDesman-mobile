@@ -1,3 +1,4 @@
+import "../../../events/domain/models/event_calendar_month.dart";
 import "../models/favorite_state.dart";
 import "../models/like_state.dart";
 import "../models/paginated_posts.dart";
@@ -10,6 +11,11 @@ abstract class PostsRepository {
   Future<PaginatedPosts> fetchPosts({
     PostsQuery query = const PostsQuery(),
     int page = 1,
+  });
+
+  Future<EventCalendarMonth> fetchEventCalendar({
+    required int year,
+    required int month,
   });
 
   Future<PostDetails> fetchPostDetails(int postId);
@@ -37,6 +43,11 @@ abstract class PostsRepository {
   Future<PostDetails> updatePost({
     required int postId,
     required PostWriteInput input,
+  });
+
+  Future<PostDetails> setEventCancelled({
+    required int postId,
+    required bool isCancelled,
   });
 
   Future<void> deletePost(int postId);

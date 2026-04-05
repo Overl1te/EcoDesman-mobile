@@ -5,6 +5,7 @@ class PostWriteInput {
     required this.kind,
     required this.isPublished,
     required this.imageUrls,
+    this.eventDate,
     this.eventStartsAt,
     this.eventEndsAt,
     this.eventLocation = "",
@@ -15,6 +16,7 @@ class PostWriteInput {
   final String kind;
   final bool isPublished;
   final List<String> imageUrls;
+  final DateTime? eventDate;
   final DateTime? eventStartsAt;
   final DateTime? eventEndsAt;
   final String eventLocation;

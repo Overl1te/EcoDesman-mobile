@@ -8,6 +8,8 @@ import "../../../../shared/widgets/app_error_state.dart";
 import "../../../../shared/widgets/remote_avatar.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
 import "../../../profile/presentation/controllers/profile_controller.dart";
+import "../../../support/data/repositories/support_repository_impl.dart";
+import "../../../support/presentation/widgets/report_content_sheet.dart";
 import "../../domain/models/post_comment.dart";
 import "../../domain/models/post_details.dart";
 import "../controllers/feed_controller.dart";
@@ -52,6 +54,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось обновить лайк"),
+        isError: true,
       );
     }
   }
@@ -71,6 +74,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось обновить избранное"),
+        isError: true,
       );
     }
   }
@@ -103,6 +107,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           error,
           fallback: "Не удалось отправить комментарий",
         ),
+        isError: true,
       );
     } finally {
       if (mounted) {
@@ -157,6 +162,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           error,
           fallback: "Не удалось обновить комментарий",
         ),
+        isError: true,
       );
     }
   }
@@ -169,7 +175,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             return AlertDialog(
               title: const Text("Удалить комментарий?"),
               content: const Text(
-                "Комментарий будет удален без возможности восстановления.",
+                "Комментарий будет удалён без возможности восстановления.",
               ),
               actions: [
                 TextButton(
@@ -197,6 +203,114 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось удалить комментарий"),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _reportPost(PostDetails post) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы отправить жалобу");
+      return;
+    }
+
+    final input = await showSupportReportSheet(
+      context,
+      title: "Пожаловаться на пост",
+      subtitle: "Жалоба уйдёт в техподдержку и привяжется к отдельному чату.",
+    );
+    if (input == null) {
+      return;
+    }
+
+    try {
+      final report = await ref
+          .read(supportRepositoryProvider)
+          .createPostReport(
+            postId: post.id,
+            reason: input.reason,
+            details: input.details,
+          );
+      if (!mounted) {
+        return;
+      }
+      _showSnack("Жалоба отправлена");
+      if (report.threadId != null) {
+        context.push("/profile/support/thread/${report.threadId}");
+      }
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(error, fallback: "Не удалось отправить жалобу"),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _reportComment(PostDetails post, PostComment comment) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы отправить жалобу");
+      return;
+    }
+
+    final input = await showSupportReportSheet(
+      context,
+      title: "Пожаловаться на комментарий",
+      subtitle: "Техподдержка получит жалобу и отдельный чат по обращению.",
+    );
+    if (input == null) {
+      return;
+    }
+
+    try {
+      final report = await ref
+          .read(supportRepositoryProvider)
+          .createCommentReport(
+            postId: post.id,
+            commentId: comment.id,
+            reason: input.reason,
+            details: input.details,
+          );
+      if (!mounted) {
+        return;
+      }
+      _showSnack("Жалоба отправлена");
+      if (report.threadId != null) {
+        context.push("/profile/support/thread/${report.threadId}");
+      }
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(error, fallback: "Не удалось отправить жалобу"),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _toggleEventCancelled(PostDetails post) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      _showSnack("Войдите, чтобы управлять мероприятием");
+      return;
+    }
+
+    try {
+      await ref
+          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .setEventCancelled(!post.isEventCancelled);
+      _invalidateAuthorCaches(post.author.id);
+      _showSnack(
+        post.isEventCancelled
+            ? "Мероприятие снова активно"
+            : "Мероприятие отмечено как отменённое",
+      );
+    } catch (error) {
+      _showSnack(
+        humanizeNetworkError(
+          error,
+          fallback: "Не удалось обновить статус мероприятия",
+        ),
+        isError: true,
       );
     }
   }
@@ -206,6 +320,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       case "edit":
         await context.push("/posts/${post.id}/edit");
         _invalidateAuthorCaches(post.author.id);
+        break;
+      case "toggle-event":
+        await _toggleEventCancelled(post);
         break;
       case "delete":
         final shouldDelete =
@@ -243,13 +360,16 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
   }
 
-  void _showSnack(String message) {
+  void _showSnack(String message, {bool isError = false}) {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
+    );
   }
 
   @override
@@ -279,9 +399,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             return [
               PopupMenuButton<String>(
                 onSelected: (value) => _onMenuAction(value, post),
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: "edit", child: Text("Редактировать")),
-                  PopupMenuItem(value: "delete", child: Text("Удалить")),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: "edit",
+                    child: Text("Редактировать"),
+                  ),
+                  if (post.isEvent)
+                    PopupMenuItem(
+                      value: "toggle-event",
+                      child: Text(
+                        post.isEventCancelled
+                            ? "Вернуть мероприятие"
+                            : "Отменить мероприятие",
+                      ),
+                    ),
+                  const PopupMenuItem(value: "delete", child: Text("Удалить")),
                 ],
               ),
             ];
@@ -441,6 +573,26 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       ),
                       label: Text("${post.favoritesCount} в избранном"),
                     ),
+                    if (!post.isOwner)
+                      OutlinedButton.icon(
+                        onPressed: () => _reportPost(post),
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text("Пожаловаться"),
+                      ),
+                    if (post.isEvent && post.canEdit)
+                      OutlinedButton.icon(
+                        onPressed: () => _toggleEventCancelled(post),
+                        icon: Icon(
+                          post.isEventCancelled
+                              ? Icons.event_available_outlined
+                              : Icons.event_busy_outlined,
+                        ),
+                        label: Text(
+                          post.isEventCancelled
+                              ? "Вернуть мероприятие"
+                              : "Отменить мероприятие",
+                        ),
+                      ),
                     _MetricChip(
                       icon: Icons.chat_bubble_outline,
                       label: "${post.commentsCount} комментариев",
@@ -489,6 +641,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     : null,
                                 onDelete: comment.canEdit
                                     ? () => _deleteComment(post, comment)
+                                    : null,
+                                onReport: !comment.isOwner
+                                    ? () => _reportComment(post, comment)
                                     : null,
                               ),
                               const SizedBox(height: 12),
@@ -552,48 +707,88 @@ class _EventInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final foreground = post.isEventCancelled
+        ? theme.colorScheme.onErrorContainer
+        : theme.colorScheme.onPrimaryContainer;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
+        color: post.isEventCancelled
+            ? theme.colorScheme.errorContainer.withValues(alpha: 0.72)
+            : theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (post.isEventCancelled) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                post.eventCancelledAt == null
+                    ? "Мероприятие отменено"
+                    : "Отменено ${formatPostDate(post.eventCancelledAt!)}",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Icon(
-                Icons.event_available_outlined,
-                color: theme.colorScheme.onPrimaryContainer,
+                post.isEventCancelled
+                    ? Icons.event_busy_outlined
+                    : Icons.event_available_outlined,
+                color: foreground,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  formatEventRange(post.eventStartsAt, post.eventEndsAt),
+                  formatEventDay(post.eventDate ?? post.eventStartsAt),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: foreground,
                   ),
                 ),
               ),
             ],
           ),
+          if (post.eventStartsAt != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.schedule_outlined, color: foreground),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    formatEventRange(post.eventStartsAt, post.eventEndsAt),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: foreground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (post.eventLocation.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             Row(
               children: [
-                Icon(
-                  Icons.place_outlined,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
+                Icon(Icons.place_outlined, color: foreground),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     post.eventLocation,
                     style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
+                      color: foreground,
                     ),
                   ),
                 ),
@@ -628,12 +823,14 @@ class _CommentTile extends StatelessWidget {
     required this.onAuthorTap,
     this.onEdit,
     this.onDelete,
+    this.onReport,
   });
 
   final PostComment comment;
   final VoidCallback onAuthorTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -685,6 +882,12 @@ class _CommentTile extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    if (onReport != null)
+                      IconButton(
+                        onPressed: onReport,
+                        tooltip: "Пожаловаться",
+                        icon: const Icon(Icons.flag_outlined, size: 20),
+                      ),
                     if (onEdit != null || onDelete != null)
                       PopupMenuButton<String>(
                         onSelected: (value) {

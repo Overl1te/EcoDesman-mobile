@@ -86,10 +86,29 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Chip(
-                    label: Text(_kindLabel(post.kind)),
-                    visualDensity: VisualDensity.compact,
-                    side: BorderSide.none,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Chip(
+                        label: Text(_kindLabel(post.kind)),
+                        visualDensity: VisualDensity.compact,
+                        side: BorderSide.none,
+                      ),
+                      if (post.isEvent && post.isEventCancelled)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Chip(
+                            label: const Text("Отменено"),
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: theme.colorScheme.errorContainer,
+                            labelStyle: TextStyle(
+                              color: theme.colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            side: BorderSide.none,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -104,11 +123,7 @@ class PostCard extends StatelessWidget {
               ],
               if (post.isEvent) ...[
                 const SizedBox(height: 12),
-                _EventSummary(
-                  start: post.eventStartsAt,
-                  end: post.eventEndsAt,
-                  location: post.eventLocation,
-                ),
+                _EventSummary(post: post),
               ],
               const SizedBox(height: 12),
               Text(
@@ -193,7 +208,7 @@ class PostCard extends StatelessWidget {
   String _kindLabel(String kind) {
     switch (kind) {
       case "event":
-        return "Событие";
+        return "Мероприятие";
       case "story":
         return "История";
       default:
@@ -203,15 +218,9 @@ class PostCard extends StatelessWidget {
 }
 
 class _EventSummary extends StatelessWidget {
-  const _EventSummary({
-    required this.start,
-    required this.end,
-    required this.location,
-  });
+  const _EventSummary({required this.post});
 
-  final DateTime? start;
-  final DateTime? end;
-  final String location;
+  final FeedPost post;
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +229,9 @@ class _EventSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
+        color: post.isEventCancelled
+            ? theme.colorScheme.errorContainer.withValues(alpha: 0.6)
+            : theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -229,41 +240,86 @@ class _EventSummary extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.event_available_outlined,
+                post.isEventCancelled
+                    ? Icons.event_busy_outlined
+                    : Icons.event_available_outlined,
                 size: 18,
-                color: theme.colorScheme.onPrimaryContainer,
+                color: post.isEventCancelled
+                    ? theme.colorScheme.onErrorContainer
+                    : theme.colorScheme.onPrimaryContainer,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  formatEventRange(start, end),
+                  formatEventDay(post.eventDate ?? post.eventStartsAt),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: post.isEventCancelled
+                        ? theme.colorScheme.onErrorContainer
+                        : theme.colorScheme.onPrimaryContainer,
                   ),
                 ),
               ),
             ],
           ),
-          if (location.trim().isNotEmpty) ...[
+          if (post.eventStartsAt != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule_outlined,
+                  size: 18,
+                  color: post.isEventCancelled
+                      ? theme.colorScheme.onErrorContainer
+                      : theme.colorScheme.onPrimaryContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    formatEventRange(post.eventStartsAt, post.eventEndsAt),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: post.isEventCancelled
+                          ? theme.colorScheme.onErrorContainer
+                          : theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (post.eventLocation.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               children: [
                 Icon(
                   Icons.place_outlined,
                   size: 18,
-                  color: theme.colorScheme.onPrimaryContainer,
+                  color: post.isEventCancelled
+                      ? theme.colorScheme.onErrorContainer
+                      : theme.colorScheme.onPrimaryContainer,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    location,
+                    post.eventLocation,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
+                      color: post.isEventCancelled
+                          ? theme.colorScheme.onErrorContainer
+                          : theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                 ),
               ],
+            ),
+          ],
+          if (post.isEventCancelled && post.eventCancelledAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              "Отменено ${formatPostDate(post.eventCancelledAt!)}",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ],

@@ -77,6 +77,12 @@ class NotificationsScreen extends ConsumerWidget {
                       if (!context.mounted) {
                         return;
                       }
+                      if (notification.supportThreadId != null) {
+                        context.push(
+                          "/profile/support/thread/${notification.supportThreadId}",
+                        );
+                        return;
+                      }
                       if (notification.postId != null) {
                         context.push("/posts/${notification.postId}");
                       }

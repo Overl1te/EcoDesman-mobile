@@ -31,6 +31,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscureLoginPassword = true;
   bool _obscureRegisterPassword = true;
   bool _obscureRegisterPasswordConfirmation = true;
+  bool _acceptTerms = false;
+  bool _acceptPrivacyPolicy = false;
+  bool _acceptPersonalData = false;
+  bool _acceptPublicPersonalDataDistribution = false;
 
   @override
   void dispose() {
@@ -63,6 +67,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
+    if (!_acceptTerms || !_acceptPrivacyPolicy || !_acceptPersonalData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Для регистрации нужно принять соглашение, политику и согласие на обработку данных.",
+          ),
+        ),
+      );
+      return;
+    }
+
     await ref
         .read(authControllerProvider.notifier)
         .register(
@@ -70,6 +85,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           email: _emailController.text.trim(),
           password: _registerPasswordController.text,
           passwordConfirmation: _registerPasswordConfirmationController.text,
+          acceptTerms: _acceptTerms,
+          acceptPrivacyPolicy: _acceptPrivacyPolicy,
+          acceptPersonalData: _acceptPersonalData,
+          acceptPublicPersonalDataDistribution:
+              _acceptPublicPersonalDataDistribution,
           displayName: _displayNameController.text.trim(),
           phone: _phoneController.text.trim(),
         );
@@ -349,6 +369,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       obscurePassword: _obscureRegisterPassword,
                                       obscurePasswordConfirmation:
                                           _obscureRegisterPasswordConfirmation,
+                                      acceptTerms: _acceptTerms,
+                                      acceptPrivacyPolicy: _acceptPrivacyPolicy,
+                                      acceptPersonalData: _acceptPersonalData,
+                                      acceptPublicPersonalDataDistribution:
+                                          _acceptPublicPersonalDataDistribution,
                                       onTogglePasswordVisibility: () {
                                         setState(() {
                                           _obscureRegisterPassword =
@@ -367,6 +392,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                               authControllerProvider.notifier,
                                             )
                                             .clearError();
+                                      },
+                                      onAcceptTermsChanged: (value) {
+                                        setState(() {
+                                          _acceptTerms = value;
+                                        });
+                                      },
+                                      onAcceptPrivacyPolicyChanged: (value) {
+                                        setState(() {
+                                          _acceptPrivacyPolicy = value;
+                                        });
+                                      },
+                                      onAcceptPersonalDataChanged: (value) {
+                                        setState(() {
+                                          _acceptPersonalData = value;
+                                        });
+                                      },
+                                      onAcceptPublicPersonalDataChanged: (value) {
+                                        setState(() {
+                                          _acceptPublicPersonalDataDistribution =
+                                              value;
+                                        });
                                       },
                                     ),
                             ),
@@ -676,9 +722,17 @@ class _RegisterForm extends StatelessWidget {
     required this.passwordConfirmationController,
     required this.obscurePassword,
     required this.obscurePasswordConfirmation,
+    required this.acceptTerms,
+    required this.acceptPrivacyPolicy,
+    required this.acceptPersonalData,
+    required this.acceptPublicPersonalDataDistribution,
     required this.onTogglePasswordVisibility,
     required this.onTogglePasswordConfirmationVisibility,
     required this.onClearError,
+    required this.onAcceptTermsChanged,
+    required this.onAcceptPrivacyPolicyChanged,
+    required this.onAcceptPersonalDataChanged,
+    required this.onAcceptPublicPersonalDataChanged,
   });
 
   final GlobalKey<FormState> formKey;
@@ -690,9 +744,17 @@ class _RegisterForm extends StatelessWidget {
   final TextEditingController passwordConfirmationController;
   final bool obscurePassword;
   final bool obscurePasswordConfirmation;
+  final bool acceptTerms;
+  final bool acceptPrivacyPolicy;
+  final bool acceptPersonalData;
+  final bool acceptPublicPersonalDataDistribution;
   final VoidCallback onTogglePasswordVisibility;
   final VoidCallback onTogglePasswordConfirmationVisibility;
   final VoidCallback onClearError;
+  final ValueChanged<bool> onAcceptTermsChanged;
+  final ValueChanged<bool> onAcceptPrivacyPolicyChanged;
+  final ValueChanged<bool> onAcceptPersonalDataChanged;
+  final ValueChanged<bool> onAcceptPublicPersonalDataChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -836,6 +898,65 @@ class _RegisterForm extends StatelessWidget {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    value: acceptTerms,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) => onAcceptTermsChanged(value ?? false),
+                    title: const Text("Принимаю пользовательское соглашение"),
+                  ),
+                  CheckboxListTile(
+                    value: acceptPrivacyPolicy,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) =>
+                        onAcceptPrivacyPolicyChanged(value ?? false),
+                    title: const Text(
+                      "Ознакомлен с политикой обработки персональных данных",
+                    ),
+                  ),
+                  CheckboxListTile(
+                    value: acceptPersonalData,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) =>
+                        onAcceptPersonalDataChanged(value ?? false),
+                    title: const Text(
+                      "Даю согласие на обработку персональных данных",
+                    ),
+                  ),
+                  CheckboxListTile(
+                    value: acceptPublicPersonalDataDistribution,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) =>
+                        onAcceptPublicPersonalDataChanged(value ?? false),
+                    title: const Text(
+                      "Разрешаю публичное распространение данных профиля",
+                    ),
+                    subtitle: const Text(
+                      "Необязательное согласие для открытых разделов профиля.",
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => context.push("/profile/help"),
+                icon: const Icon(Icons.description_outlined),
+                label: const Text("Открыть документы"),
+              ),
             ),
           ],
         ),

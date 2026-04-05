@@ -21,6 +21,7 @@ class AppUser {
     required this.isActive,
     required this.isSuperuser,
     required this.canAccessAdmin,
+    required this.canAccessSupport,
     required this.dateJoined,
     required this.lastLogin,
     required this.stats,
@@ -45,6 +46,7 @@ class AppUser {
   final bool isActive;
   final bool isSuperuser;
   final bool canAccessAdmin;
+  final bool canAccessSupport;
   final DateTime? dateJoined;
   final DateTime? lastLogin;
   final UserStats stats;
@@ -52,6 +54,8 @@ class AppUser {
   String get displayName => name.isNotEmpty ? name : username;
 
   bool get isAdmin => canAccessAdmin || role == "admin";
+
+  bool get isSupport => canAccessSupport || role == "support";
 
   bool get isModerator => role == "moderator";
 
@@ -74,6 +78,7 @@ class AppUser {
     bool? isActive,
     bool? isSuperuser,
     bool? canAccessAdmin,
+    bool? canAccessSupport,
     DateTime? dateJoined,
     DateTime? lastLogin,
     UserStats? stats,
@@ -98,6 +103,7 @@ class AppUser {
       isActive: isActive ?? this.isActive,
       isSuperuser: isSuperuser ?? this.isSuperuser,
       canAccessAdmin: canAccessAdmin ?? this.canAccessAdmin,
+      canAccessSupport: canAccessSupport ?? this.canAccessSupport,
       dateJoined: dateJoined ?? this.dateJoined,
       lastLogin: lastLogin ?? this.lastLogin,
       stats: stats ?? this.stats,
@@ -125,6 +131,7 @@ class AppUser {
       isActive: json["is_active"] as bool? ?? true,
       isSuperuser: json["is_superuser"] as bool? ?? false,
       canAccessAdmin: json["can_access_admin"] as bool? ?? false,
+      canAccessSupport: json["can_access_support"] as bool? ?? false,
       dateJoined: _parseDateTime(json["date_joined"]),
       lastLogin: _parseDateTime(json["last_login"]),
       stats: UserStats.fromJson(

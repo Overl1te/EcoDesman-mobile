@@ -31,11 +31,13 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
   final _bodyController = TextEditingController();
   final _imageUrlsController = TextEditingController();
   final _eventLocationController = TextEditingController();
+
   bool _isPublished = true;
   bool _isSaving = false;
   bool _isUploadingImages = false;
   bool _didHydrate = false;
   String _selectedKind = "news";
+  DateTime? _eventDate;
   DateTime? _eventStartsAt;
   DateTime? _eventEndsAt;
   String? _errorMessage;
@@ -63,6 +65,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
         .join("\n");
     _eventLocationController.text = post.eventLocation;
     _selectedKind = post.kind;
+    _eventDate = post.eventDate ?? post.eventStartsAt;
     _eventStartsAt = post.eventStartsAt;
     _eventEndsAt = post.eventEndsAt;
     _isPublished = post.isPublished;
@@ -123,52 +126,87 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
     }
   }
 
-  Future<void> _pickEventStart() async {
-    final picked = await _pickDateTime(
-      initial: _eventStartsAt ?? DateTime.now().add(const Duration(days: 1)),
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() {
-      _eventStartsAt = picked;
-      _eventEndsAt ??= picked.add(const Duration(hours: 2));
-    });
-  }
-
-  Future<void> _pickEventEnd() async {
-    final start = _eventStartsAt ?? DateTime.now().add(const Duration(days: 1));
-    final picked = await _pickDateTime(
-      initial: _eventEndsAt ?? start.add(const Duration(hours: 2)),
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() {
-      _eventEndsAt = picked;
-    });
-  }
-
-  Future<DateTime?> _pickDateTime({required DateTime initial}) async {
-    final date = await showDatePicker(
+  Future<void> _pickEventDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      initialDate:
+          _eventDate ?? _eventStartsAt ?? now.add(const Duration(days: 1)),
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 10, 12, 31),
     );
-    if (date == null || !mounted) {
-      return null;
+    if (picked == null) {
+      return;
     }
 
-    final time = await showTimePicker(
+    setState(() {
+      _eventDate = DateTime(picked.year, picked.month, picked.day);
+      _eventStartsAt = _syncWithDate(_eventStartsAt, _eventDate);
+      _eventEndsAt = _syncWithDate(_eventEndsAt, _eventDate);
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _pickEventStartTime() async {
+    if (_eventDate == null) {
+      await _pickEventDate();
+      if (!mounted || _eventDate == null) {
+        return;
+      }
+    }
+
+    final initial =
+        _eventStartsAt ??
+        DateTime(_eventDate!.year, _eventDate!.month, _eventDate!.day, 12, 0);
+    final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
     );
-    if (time == null) {
-      return null;
+    if (picked == null) {
+      return;
     }
 
-    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    setState(() {
+      _eventStartsAt = DateTime(
+        _eventDate!.year,
+        _eventDate!.month,
+        _eventDate!.day,
+        picked.hour,
+        picked.minute,
+      );
+      _eventEndsAt ??= _eventStartsAt!.add(const Duration(hours: 2));
+    });
+  }
+
+  Future<void> _pickEventEndTime() async {
+    if (_eventDate == null) {
+      await _pickEventDate();
+      if (!mounted || _eventDate == null) {
+        return;
+      }
+    }
+
+    final initial =
+        _eventEndsAt ??
+        _eventStartsAt?.add(const Duration(hours: 2)) ??
+        DateTime(_eventDate!.year, _eventDate!.month, _eventDate!.day, 14, 0);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _eventEndsAt = DateTime(
+        _eventDate!.year,
+        _eventDate!.month,
+        _eventDate!.day,
+        picked.hour,
+        picked.minute,
+      );
+    });
   }
 
   Future<void> _save() async {
@@ -181,21 +219,19 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
       return;
     }
 
-    if (_isEvent &&
-        (_eventStartsAt == null ||
-            _eventLocationController.text.trim().isEmpty)) {
+    if (_isEvent && _eventDate == null) {
       setState(() {
-        _errorMessage = "Для события укажите дату начала и место проведения";
+        _errorMessage = "Для мероприятия нужно указать дату";
       });
       return;
     }
 
     if (_isEvent &&
-        _eventEndsAt != null &&
         _eventStartsAt != null &&
+        _eventEndsAt != null &&
         _eventEndsAt!.isBefore(_eventStartsAt!)) {
       setState(() {
-        _errorMessage = "Дата окончания не может быть раньше даты начала";
+        _errorMessage = "Время окончания не может быть раньше времени начала";
       });
       return;
     }
@@ -215,6 +251,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .toList(),
+      eventDate: _isEvent ? _eventDate : null,
       eventStartsAt: _isEvent ? _eventStartsAt : null,
       eventEndsAt: _isEvent ? _eventEndsAt : null,
       eventLocation: _isEvent ? _eventLocationController.text.trim() : "",
@@ -246,7 +283,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isEditing ? "Пост обновлен" : "Пост сохранен"),
+          content: Text(widget.isEditing ? "Пост обновлён" : "Пост сохранён"),
         ),
       );
 
@@ -276,7 +313,6 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
-    final theme = Theme.of(context);
 
     if (!authState.isAuthenticated || authState.user == null) {
       return Scaffold(
@@ -289,7 +325,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
               children: [
                 Text(
                   "Чтобы публиковать посты, нужно войти в аккаунт.",
-                  style: theme.textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -334,6 +370,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
               errorMessage: _errorMessage,
               isSaving: _isSaving,
               isUploadingImages: _isUploadingImages,
+              eventDate: _eventDate,
               eventStartsAt: _eventStartsAt,
               eventEndsAt: _eventEndsAt,
               onUploadImages: _pickAndUploadImages,
@@ -344,14 +381,16 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
                 setState(() {
                   _selectedKind = value;
                   if (value != "event") {
+                    _eventDate = null;
                     _eventStartsAt = null;
                     _eventEndsAt = null;
                     _eventLocationController.clear();
                   }
                 });
               },
-              onPickEventStart: _pickEventStart,
-              onPickEventEnd: _pickEventEnd,
+              onPickEventDate: _pickEventDate,
+              onPickEventStartTime: _pickEventStartTime,
+              onPickEventEndTime: _pickEventEndTime,
               onPublishedChanged: (value) {
                 setState(() {
                   _isPublished = value;
@@ -377,6 +416,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
         errorMessage: _errorMessage,
         isSaving: _isSaving,
         isUploadingImages: _isUploadingImages,
+        eventDate: _eventDate,
         eventStartsAt: _eventStartsAt,
         eventEndsAt: _eventEndsAt,
         onUploadImages: _pickAndUploadImages,
@@ -387,14 +427,16 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
           setState(() {
             _selectedKind = value;
             if (value != "event") {
+              _eventDate = null;
               _eventStartsAt = null;
               _eventEndsAt = null;
               _eventLocationController.clear();
             }
           });
         },
-        onPickEventStart: _pickEventStart,
-        onPickEventEnd: _pickEventEnd,
+        onPickEventDate: _pickEventDate,
+        onPickEventStartTime: _pickEventStartTime,
+        onPickEventEndTime: _pickEventEndTime,
         onPublishedChanged: (value) {
           setState(() {
             _isPublished = value;
@@ -418,12 +460,14 @@ class _PostEditorForm extends StatelessWidget {
     required this.errorMessage,
     required this.isSaving,
     required this.isUploadingImages,
+    required this.eventDate,
     required this.eventStartsAt,
     required this.eventEndsAt,
     required this.onUploadImages,
     required this.onKindChanged,
-    required this.onPickEventStart,
-    required this.onPickEventEnd,
+    required this.onPickEventDate,
+    required this.onPickEventStartTime,
+    required this.onPickEventEndTime,
     required this.onPublishedChanged,
     required this.onSave,
   });
@@ -438,12 +482,14 @@ class _PostEditorForm extends StatelessWidget {
   final String? errorMessage;
   final bool isSaving;
   final bool isUploadingImages;
+  final DateTime? eventDate;
   final DateTime? eventStartsAt;
   final DateTime? eventEndsAt;
   final VoidCallback onUploadImages;
   final ValueChanged<String?> onKindChanged;
-  final VoidCallback onPickEventStart;
-  final VoidCallback onPickEventEnd;
+  final VoidCallback onPickEventDate;
+  final VoidCallback onPickEventStartTime;
+  final VoidCallback onPickEventEndTime;
   final ValueChanged<bool> onPublishedChanged;
   final VoidCallback onSave;
 
@@ -476,17 +522,22 @@ class _PostEditorForm extends StatelessWidget {
               items: const [
                 DropdownMenuItem(value: "news", child: Text("Новость")),
                 DropdownMenuItem(value: "story", child: Text("История")),
-                DropdownMenuItem(value: "event", child: Text("Событие")),
+                DropdownMenuItem(value: "event", child: Text("Мероприятие")),
               ],
               onChanged: onKindChanged,
             ),
             if (isEvent) ...[
               const SizedBox(height: 16),
-              TextFormField(
-                controller: eventLocationController,
-                decoration: const InputDecoration(
-                  labelText: "Место проведения",
-                  border: OutlineInputBorder(),
+              OutlinedButton.icon(
+                onPressed: onPickEventDate,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    eventDate == null
+                        ? "Выбрать дату мероприятия"
+                        : formatEventDay(eventDate),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -494,32 +545,43 @@ class _PostEditorForm extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: onPickEventStart,
-                      icon: const Icon(Icons.event),
-                      label: Text(
-                        eventStartsAt == null
-                            ? "Начало"
-                            : formatEventRange(eventStartsAt, null),
+                      onPressed: onPickEventStartTime,
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          eventStartsAt == null
+                              ? "Время начала"
+                              : formatEventTime(eventStartsAt),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onPickEventEndTime,
+                      icon: const Icon(Icons.timer_outlined),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          eventEndsAt == null
+                              ? "Время окончания"
+                              : formatEventTime(eventEndsAt),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onPickEventEnd,
-                      icon: const Icon(Icons.schedule),
-                      label: Text(
-                        eventEndsAt == null
-                            ? "Окончание"
-                            : formatEventRange(eventEndsAt, null),
-                      ),
-                    ),
-                  ),
-                ],
+              TextFormField(
+                controller: eventLocationController,
+                decoration: const InputDecoration(
+                  labelText: "Место проведения",
+                  hintText: "Необязательно",
+                  border: OutlineInputBorder(),
+                ),
               ),
             ],
             const SizedBox(height: 16),
@@ -620,4 +682,18 @@ class _PostEditorForm extends StatelessWidget {
       ),
     );
   }
+}
+
+DateTime? _syncWithDate(DateTime? source, DateTime? targetDate) {
+  if (source == null || targetDate == null) {
+    return source;
+  }
+
+  return DateTime(
+    targetDate.year,
+    targetDate.month,
+    targetDate.day,
+    source.hour,
+    source.minute,
+  );
 }

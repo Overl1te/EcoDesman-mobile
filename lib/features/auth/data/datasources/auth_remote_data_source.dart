@@ -43,6 +43,10 @@ class AuthRemoteDataSource {
     required String email,
     required String password,
     required String passwordConfirmation,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    bool acceptPublicPersonalDataDistribution = false,
     required String displayName,
     required String phone,
   }) async {
@@ -55,6 +59,11 @@ class AuthRemoteDataSource {
         "phone": phone,
         "password": password,
         "password_confirmation": passwordConfirmation,
+        "accept_terms": acceptTerms,
+        "accept_privacy_policy": acceptPrivacyPolicy,
+        "accept_personal_data": acceptPersonalData,
+        "accept_public_personal_data_distribution":
+            acceptPublicPersonalDataDistribution,
       },
       options: Options(extra: const {"skipAuth": true}),
     );

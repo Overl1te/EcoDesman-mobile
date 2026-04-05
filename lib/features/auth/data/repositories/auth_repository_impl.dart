@@ -44,6 +44,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String password,
     required String passwordConfirmation,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    bool acceptPublicPersonalDataDistribution = false,
     String displayName = "",
     String phone = "",
   }) async {
@@ -52,6 +56,11 @@ class AuthRepositoryImpl implements AuthRepository {
       email: email,
       password: password,
       passwordConfirmation: passwordConfirmation,
+      acceptTerms: acceptTerms,
+      acceptPrivacyPolicy: acceptPrivacyPolicy,
+      acceptPersonalData: acceptPersonalData,
+      acceptPublicPersonalDataDistribution:
+          acceptPublicPersonalDataDistribution,
       displayName: displayName,
       phone: phone,
     );

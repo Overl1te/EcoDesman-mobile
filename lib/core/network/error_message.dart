@@ -11,7 +11,11 @@ String _localizeServerMessage(String message) {
       )
       .replaceAll(
         "event_starts_at is required for events",
-        "Укажите дату начала события",
+        "Укажите дату и время начала события",
+      )
+      .replaceAll(
+        "event_date is required for events",
+        "Укажите дату мероприятия",
       )
       .replaceAll(
         "event_ends_at must be after event_starts_at",
@@ -20,6 +24,10 @@ String _localizeServerMessage(String message) {
       .replaceAll(
         "event_location is required for events",
         "Укажите место проведения события",
+      )
+      .replaceAll(
+        "Only event posts can be cancelled",
+        "Отменять можно только посты с типом мероприятия",
       );
 }
 
@@ -52,6 +60,10 @@ String? _extractValidationMessage(dynamic data) {
       "email",
       "username",
       "phone",
+      "event_date",
+      "event_starts_at",
+      "event_ends_at",
+      "event_location",
     ]) {
       final message = _extractValidationMessage(data[key]);
       if (message != null && message.isNotEmpty) {

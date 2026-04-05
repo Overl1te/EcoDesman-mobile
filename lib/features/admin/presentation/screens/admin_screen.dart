@@ -104,7 +104,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     });
 
     try {
-      _posts = await ref.read(adminRemoteDataSourceProvider).fetchPosts(
+      _posts = await ref
+          .read(adminRemoteDataSourceProvider)
+          .fetchPosts(
             search: _postSearchController.text,
             kind: _postKind,
             publicationStatus: _postStatus,
@@ -128,7 +130,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     });
 
     try {
-      _users = await ref.read(adminRemoteDataSourceProvider).fetchUsers(
+      _users = await ref
+          .read(adminRemoteDataSourceProvider)
+          .fetchUsers(
             search: _userSearchController.text,
             role: _userRole,
             status: _userStatus,
@@ -155,7 +159,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       final categories = await ref
           .read(adminRemoteDataSourceProvider)
           .fetchMapCategories();
-      final points = await ref.read(adminRemoteDataSourceProvider).fetchMapPoints(
+      final points = await ref
+          .read(adminRemoteDataSourceProvider)
+          .fetchMapPoints(
             search: _pointSearchController.text,
             isActive: switch (_pointStatus) {
               "active" => true,
@@ -178,10 +184,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     }
   }
 
-  Future<void> _runAction(
-    String key,
-    Future<void> Function() action,
-  ) async {
+  Future<void> _runAction(String key, Future<void> Function() action) async {
     setState(() => _busyKey = key);
     try {
       await action();
@@ -231,19 +234,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError
-            ? Theme.of(context).colorScheme.error
-            : null,
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
       ),
     );
   }
 
   Future<void> _togglePostPublished(FeedPost post) async {
     await _runAction("post-${post.id}", () async {
-      await ref.read(adminRemoteDataSourceProvider).togglePostPublished(
-            postId: post.id,
-            isPublished: !post.isPublished,
-          );
+      await ref
+          .read(adminRemoteDataSourceProvider)
+          .togglePostPublished(postId: post.id, isPublished: !post.isPublished);
       await Future.wait([_loadPosts(), _loadOverview()]);
     });
   }
@@ -296,10 +296,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) {
-        return _PointEditorSheet(
-          categories: _categories,
-          point: point,
-        );
+        return _PointEditorSheet(categories: _categories, point: point);
       },
     );
 
@@ -307,17 +304,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       return;
     }
 
-    await _runAction(point == null ? "point-create" : "point-save-${point.id}", () async {
-      if (point == null) {
-        await ref.read(adminRemoteDataSourceProvider).createMapPoint(input);
-      } else {
-        await ref.read(adminRemoteDataSourceProvider).updateMapPoint(
-              pointId: point.id,
-              input: input,
-            );
-      }
-      await Future.wait([_loadCategoriesAndPoints(), _loadOverview()]);
-    });
+    await _runAction(
+      point == null ? "point-create" : "point-save-${point.id}",
+      () async {
+        if (point == null) {
+          await ref.read(adminRemoteDataSourceProvider).createMapPoint(input);
+        } else {
+          await ref
+              .read(adminRemoteDataSourceProvider)
+              .updateMapPoint(pointId: point.id, input: input);
+        }
+        await Future.wait([_loadCategoriesAndPoints(), _loadOverview()]);
+      },
+    );
   }
 
   Future<void> _deletePoint(AdminMapPoint point) async {
@@ -401,7 +400,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     busyKey: _busyKey,
                     onRefresh: _loadPosts,
                     onKindChanged: (value) => setState(() => _postKind = value),
-                    onStatusChanged: (value) => setState(() => _postStatus = value),
+                    onStatusChanged: (value) =>
+                        setState(() => _postStatus = value),
                     onView: (post) => context.push("/posts/${post.id}"),
                     onEdit: (post) => context.push("/posts/${post.id}/edit"),
                     onTogglePublished: _togglePostPublished,
@@ -416,8 +416,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     selectedStatus: _userStatus,
                     busyKey: _busyKey,
                     onRefresh: _loadUsers,
-                    onRoleFilterChanged: (value) => setState(() => _userRole = value),
-                    onStatusChanged: (value) => setState(() => _userStatus = value),
+                    onRoleFilterChanged: (value) =>
+                        setState(() => _userRole = value),
+                    onStatusChanged: (value) =>
+                        setState(() => _userStatus = value),
                     onRoleChanged: _updateUserRole,
                     onWarn: (user) => _moderateUser(user, "warn"),
                     onBan: (user) => _moderateUser(user, "ban"),
@@ -432,7 +434,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     categories: _categories,
                     busyKey: _busyKey,
                     onRefresh: _loadCategoriesAndPoints,
-                    onStatusChanged: (value) => setState(() => _pointStatus = value),
+                    onStatusChanged: (value) =>
+                        setState(() => _pointStatus = value),
                     onCreate: () => _openPointEditor(),
                     onEdit: _openPointEditor,
                     onDelete: _deletePoint,
@@ -623,8 +626,14 @@ class _PostsTab extends StatelessWidget {
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: "all", child: Text("Все публикации")),
-                    DropdownMenuItem(value: "published", child: Text("Опубликованные")),
+                    DropdownMenuItem(
+                      value: "all",
+                      child: Text("Все публикации"),
+                    ),
+                    DropdownMenuItem(
+                      value: "published",
+                      child: Text("Опубликованные"),
+                    ),
                     DropdownMenuItem(value: "draft", child: Text("Черновики")),
                   ],
                   onChanged: (value) {
@@ -667,10 +676,11 @@ class _PostsTab extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                post.title.isEmpty ? "Без заголовка" : post.title,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                post.title.isEmpty
+                                    ? "Без заголовка"
+                                    : post.title,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -681,7 +691,9 @@ class _PostsTab extends StatelessWidget {
                           ),
                         ),
                         Chip(
-                          label: Text(post.isPublished ? "Опубликован" : "Черновик"),
+                          label: Text(
+                            post.isPublished ? "Опубликован" : "Черновик",
+                          ),
                         ),
                       ],
                     ),
@@ -705,7 +717,9 @@ class _PostsTab extends StatelessWidget {
                           onPressed: () => onEdit(post),
                         ),
                         ActionChip(
-                          label: Text(post.isPublished ? "В черновик" : "Опубликовать"),
+                          label: Text(
+                            post.isPublished ? "В черновик" : "Опубликовать",
+                          ),
                           onPressed: busyKey == "post-${post.id}"
                               ? null
                               : () => onTogglePublished(post),
@@ -800,8 +814,18 @@ class _UsersTab extends StatelessWidget {
                   items: const [
                     DropdownMenuItem(value: "all", child: Text("Все роли")),
                     DropdownMenuItem(value: "admin", child: Text("Админы")),
-                    DropdownMenuItem(value: "moderator", child: Text("Модераторы")),
-                    DropdownMenuItem(value: "user", child: Text("Пользователи")),
+                    DropdownMenuItem(
+                      value: "support",
+                      child: Text("Техподдержка"),
+                    ),
+                    DropdownMenuItem(
+                      value: "moderator",
+                      child: Text("Модераторы"),
+                    ),
+                    DropdownMenuItem(
+                      value: "user",
+                      child: Text("Пользователи"),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -819,8 +843,14 @@ class _UsersTab extends StatelessWidget {
                   items: const [
                     DropdownMenuItem(value: "all", child: Text("Все статусы")),
                     DropdownMenuItem(value: "active", child: Text("Активные")),
-                    DropdownMenuItem(value: "banned", child: Text("Заблокированные")),
-                    DropdownMenuItem(value: "admin", child: Text("С доступом к админке")),
+                    DropdownMenuItem(
+                      value: "banned",
+                      child: Text("Заблокированные"),
+                    ),
+                    DropdownMenuItem(
+                      value: "admin",
+                      child: Text("С доступом к админке"),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -857,8 +887,8 @@ class _UsersTab extends StatelessWidget {
                     Text(
                       user.displayName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text("@${user.username} · ${user.email}"),
@@ -868,9 +898,15 @@ class _UsersTab extends StatelessWidget {
                       runSpacing: 8,
                       children: [
                         RoleChip(role: user.role),
-                        Chip(label: Text(user.isBanned ? "Заблокирован" : "Активен")),
+                        Chip(
+                          label: Text(
+                            user.isBanned ? "Заблокирован" : "Активен",
+                          ),
+                        ),
                         if (user.canAccessAdmin)
                           const Chip(label: Text("Админ-доступ")),
+                        if (user.canAccessSupport)
+                          const Chip(label: Text("Доступ к поддержке")),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -882,8 +918,18 @@ class _UsersTab extends StatelessWidget {
                       ),
                       items: const [
                         DropdownMenuItem(value: "admin", child: Text("Админ")),
-                        DropdownMenuItem(value: "moderator", child: Text("Модератор")),
-                        DropdownMenuItem(value: "user", child: Text("Пользователь")),
+                        DropdownMenuItem(
+                          value: "support",
+                          child: Text("Техподдержка"),
+                        ),
+                        DropdownMenuItem(
+                          value: "moderator",
+                          child: Text("Модератор"),
+                        ),
+                        DropdownMenuItem(
+                          value: "user",
+                          child: Text("Пользователь"),
+                        ),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -903,11 +949,15 @@ class _UsersTab extends StatelessWidget {
                               : () => onWarn(user),
                         ),
                         ActionChip(
-                          label: Text(user.isBanned ? "Разблокировать" : "Заблокировать"),
-                          onPressed: busyKey == "user-ban-${user.id}" ||
+                          label: Text(
+                            user.isBanned ? "Разблокировать" : "Заблокировать",
+                          ),
+                          onPressed:
+                              busyKey == "user-ban-${user.id}" ||
                                   busyKey == "user-unban-${user.id}"
                               ? null
-                              : () => user.isBanned ? onUnban(user) : onBan(user),
+                              : () =>
+                                    user.isBanned ? onUnban(user) : onBan(user),
                         ),
                       ],
                     ),
@@ -1038,12 +1088,13 @@ class _PointsTab extends StatelessWidget {
                         Expanded(
                           child: Text(
                             point.title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                         ),
-                        Chip(label: Text(point.isActive ? "Активна" : "Скрыта")),
+                        Chip(
+                          label: Text(point.isActive ? "Активна" : "Скрыта"),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -1086,10 +1137,7 @@ class _PointsTab extends StatelessWidget {
 }
 
 class _PointEditorSheet extends StatefulWidget {
-  const _PointEditorSheet({
-    required this.categories,
-    this.point,
-  });
+  const _PointEditorSheet({required this.categories, this.point});
 
   final List<EcoMapCategory> categories;
   final AdminMapPoint? point;
@@ -1121,9 +1169,13 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
     _shortDescriptionController = TextEditingController(
       text: point?.shortDescription ?? "",
     );
-    _descriptionController = TextEditingController(text: point?.description ?? "");
+    _descriptionController = TextEditingController(
+      text: point?.description ?? "",
+    );
     _addressController = TextEditingController(text: point?.address ?? "");
-    _workingHoursController = TextEditingController(text: point?.workingHours ?? "");
+    _workingHoursController = TextEditingController(
+      text: point?.workingHours ?? "",
+    );
     _latitudeController = TextEditingController(
       text: point != null ? "${point.latitude}" : "",
     );
@@ -1137,7 +1189,8 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
       text: point?.images.map((image) => image.imageUrl).join("\n") ?? "",
     );
     _isActive = point?.isActive ?? true;
-    _selectedCategoryIds = point?.categories.map((item) => item.id).toSet() ?? <int>{};
+    _selectedCategoryIds =
+        point?.categories.map((item) => item.id).toSet() ?? <int>{};
   }
 
   @override
@@ -1170,9 +1223,9 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
           children: [
             Text(
               widget.point == null ? "Новая точка" : "Редактор точки",
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
             for (final field in [
@@ -1185,7 +1238,11 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
               (_latitudeController, "Широта", 1),
               (_longitudeController, "Долгота", 1),
               (_sortOrderController, "Порядок сортировки", 1),
-              (_imageUrlsController, "Изображения (по одной ссылке на строку)", 4),
+              (
+                _imageUrlsController,
+                "Изображения (по одной ссылке на строку)",
+                4,
+              ),
             ]) ...[
               TextField(
                 controller: field.$1,
@@ -1230,9 +1287,14 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: () {
-                  final latitude = double.tryParse(_latitudeController.text.trim());
-                  final longitude = double.tryParse(_longitudeController.text.trim());
-                  final sortOrder = int.tryParse(_sortOrderController.text.trim()) ?? 0;
+                  final latitude = double.tryParse(
+                    _latitudeController.text.trim(),
+                  );
+                  final longitude = double.tryParse(
+                    _longitudeController.text.trim(),
+                  );
+                  final sortOrder =
+                      int.tryParse(_sortOrderController.text.trim()) ?? 0;
 
                   if (_titleController.text.trim().isEmpty ||
                       _slugController.text.trim().isEmpty ||
@@ -1240,7 +1302,9 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
                       longitude == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Заполните название, slug и корректные координаты."),
+                        content: Text(
+                          "Заполните название, slug и корректные координаты.",
+                        ),
                       ),
                     );
                     return;
@@ -1267,7 +1331,9 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
                     ),
                   );
                 },
-                child: Text(widget.point == null ? "Создать точку" : "Сохранить"),
+                child: Text(
+                  widget.point == null ? "Создать точку" : "Сохранить",
+                ),
               ),
             ),
           ],

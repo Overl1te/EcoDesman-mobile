@@ -2,6 +2,7 @@ import "package:dio/dio.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../../../../core/network/api_client.dart";
+import "../../../events/domain/models/event_calendar_month.dart";
 import "../../domain/models/favorite_state.dart";
 import "../../domain/models/like_state.dart";
 import "../../domain/models/paginated_posts.dart";
@@ -45,6 +46,19 @@ class PostsRemoteDataSource {
     final response = await _dio.get("/posts", queryParameters: queryParameters);
 
     return PaginatedPosts.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
+  Future<EventCalendarMonth> fetchEventCalendar({
+    required int year,
+    required int month,
+  }) async {
+    final response = await _dio.get(
+      "/posts/calendar",
+      queryParameters: {"year": year, "month": month},
+    );
+    return EventCalendarMonth.fromJson(
       Map<String, dynamic>.from(response.data as Map),
     );
   }
@@ -132,6 +146,18 @@ class PostsRemoteDataSource {
     );
   }
 
+  Future<PostDetails> setEventCancelled({
+    required int postId,
+    required bool isCancelled,
+  }) async {
+    final response = isCancelled
+        ? await _dio.post("/posts/$postId/cancel")
+        : await _dio.delete("/posts/$postId/cancel");
+    return PostDetails.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
   Future<void> deletePost(int postId) {
     return _dio.delete("/posts/$postId");
   }
@@ -143,6 +169,7 @@ class PostsRemoteDataSource {
       "kind": input.kind,
       "is_published": input.isPublished,
       "image_urls": input.imageUrls,
+      "event_date": input.eventDate?.toIso8601String().split("T").first,
       "event_starts_at": input.eventStartsAt?.toIso8601String(),
       "event_ends_at": input.eventEndsAt?.toIso8601String(),
       "event_location": input.eventLocation,

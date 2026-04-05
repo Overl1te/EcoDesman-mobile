@@ -11,6 +11,9 @@ import "../../features/notifications/presentation/screens/notifications_screen.d
 import "../../features/profile/presentation/screens/profile_settings_screen.dart";
 import "../../features/profile/presentation/screens/public_profile_screen.dart";
 import "../../features/search/presentation/screens/search_screen.dart";
+import "../../features/support/presentation/screens/help_info_screen.dart";
+import "../../features/support/presentation/screens/support_center_screen.dart";
+import "../../features/support/presentation/screens/support_thread_screen.dart";
 import "../app_shell_page.dart";
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -65,9 +68,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
-        path: "/admin",
-        builder: (context, state) => const AdminScreen(),
+        path: "/profile/help",
+        builder: (context, state) => const HelpInfoScreen(),
       ),
+      GoRoute(
+        path: "/profile/support",
+        builder: (context, state) => const SupportCenterScreen(),
+      ),
+      GoRoute(
+        path: "/profile/support/thread/:threadId",
+        builder: (context, state) {
+          final threadId = int.parse(state.pathParameters["threadId"]!);
+          return SupportThreadScreen(threadId: threadId);
+        },
+      ),
+      GoRoute(path: "/admin", builder: (context, state) => const AdminScreen()),
     ],
   );
 });
