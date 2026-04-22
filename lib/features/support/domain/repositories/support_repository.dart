@@ -56,4 +56,17 @@ abstract class SupportRepository {
     required String reason,
     required String details,
   });
+
+  Future<SupportReport> createUserMarkerReport({
+    required int markerId,
+    required String reason,
+    required String details,
+  });
+
+  Future<SupportReport> createUserMarkerCommentReport({
+    required int markerId,
+    required int commentId,
+    required String reason,
+    required String details,
+  });
 }

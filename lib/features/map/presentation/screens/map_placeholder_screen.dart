@@ -1,16 +1,24 @@
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:maplibre/maplibre.dart";
 import "package:url_launcher/url_launcher.dart";
 
+import "../../../../core/network/error_message.dart";
+import "../../../../core/network/image_upload_service.dart";
 import "../../../../shared/widgets/app_empty_state.dart";
 import "../../../../shared/widgets/app_error_state.dart";
+import "../../../auth/presentation/controllers/auth_controller.dart";
 import "../../domain/models/eco_map_category.dart";
 import "../../domain/models/eco_map_point.dart";
 import "../../domain/models/map_bounds.dart";
+import "../../domain/models/user_map_marker.dart";
+import "../../domain/models/user_map_marker_input.dart";
+import "../../data/repositories/map_repository_impl.dart";
 import "../controllers/map_controller.dart" as map_feature;
 import "../map_point_style.dart";
 import "../widgets/map_point_details_sheet.dart";
+import "../widgets/user_map_marker_details_sheet.dart";
 
 class MapPlaceholderScreen extends ConsumerStatefulWidget {
   const MapPlaceholderScreen({super.key});
@@ -35,9 +43,12 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
 
   MapController? _mapController;
   int? _selectedPointId;
+  int? _selectedUserMarkerId;
   String _selectedCategorySlug = "all";
   bool _isThreeDimensional = true;
   bool _filtersExpanded = true;
+  bool _showUserMarkers = true;
+  bool _isAddingUserMarker = false;
 
   LngLatBounds _toLngLatBounds(MapBounds bounds) {
     return LngLatBounds(
@@ -56,6 +67,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
 
     setState(() {
       _selectedPointId = point.id;
+      _selectedUserMarkerId = null;
     });
 
     await controller.animateCamera(
@@ -82,6 +94,92 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     setState(() {
       _selectedPointId = null;
     });
+  }
+
+  Future<void> _focusUserMarker(UserMapMarker marker) async {
+    final controller = _mapController;
+    if (controller == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedUserMarkerId = marker.id;
+      _selectedPointId = null;
+    });
+
+    await controller.animateCamera(
+      center: Geographic(lon: marker.longitude, lat: marker.latitude),
+      zoom: 13.6,
+      pitch: _isThreeDimensional
+          ? _threeDimensionalPitch
+          : _twoDimensionalPitch,
+      bearing: _isThreeDimensional ? _threeDimensionalBearing : 0,
+      nativeDuration: const Duration(milliseconds: 850),
+      webMaxDuration: const Duration(milliseconds: 850),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await showUserMapMarkerDetailsSheet(context, markerId: marker.id);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedUserMarkerId = null;
+    });
+  }
+
+  Future<void> _openCreateUserMarkerSheet(Geographic point) async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Войдите, чтобы добавить метку")),
+      );
+      return;
+    }
+
+    final input = await showModalBottomSheet<UserMapMarkerInput>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) =>
+          _CreateUserMarkerSheet(latitude: point.lat, longitude: point.lon),
+    );
+
+    if (!mounted || input == null) {
+      return;
+    }
+
+    try {
+      final marker = await ref
+          .read(mapRepositoryProvider)
+          .createUserMarker(input);
+      await ref.read(map_feature.mapControllerProvider.notifier).refresh();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isAddingUserMarker = false;
+        _showUserMarkers = true;
+      });
+      await _focusUserMarker(marker);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            humanizeNetworkError(error, fallback: "Не удалось создать метку"),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _togglePerspective() async {
@@ -151,6 +249,16 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     return null;
   }
 
+  UserMapMarker? _selectedUserMarker(List<UserMapMarker> markers) {
+    for (final marker in markers) {
+      if (marker.id == _selectedUserMarkerId) {
+        return marker;
+      }
+    }
+
+    return null;
+  }
+
   List<EcoMapCategory> _sortedCategories(List<EcoMapCategory> categories) {
     final sorted = [...categories];
     sorted.sort((left, right) {
@@ -181,6 +289,14 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     );
   }
 
+  Feature<Point> _toUserMarkerFeature(UserMapMarker marker) {
+    return Feature(
+      id: "user-${marker.id}",
+      geometry: Point(Geographic(lon: marker.longitude, lat: marker.latitude)),
+      properties: {"title": marker.title},
+    );
+  }
+
   List<_PointLayerGroup> _groupPointsByAppearance(List<EcoMapPoint> points) {
     final groupedFeatures = <String, List<Feature<Point>>>{};
     final groupedAppearances = <String, MapPointAppearance>{};
@@ -205,6 +321,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
   Future<void> _handleMapTap(
     MapEvent event,
     List<EcoMapPoint> filteredPoints,
+    List<UserMapMarker> filteredUserMarkers,
   ) async {
     if (event is! MapEventClick && event is! MapEventLongClick) {
       return;
@@ -216,7 +333,13 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
       return;
     }
 
+    if (_isAddingUserMarker) {
+      await _openCreateUserMarkerSheet(userInput.point);
+      return;
+    }
+
     EcoMapPoint? tappedPoint;
+    UserMapMarker? tappedUserMarker;
     var bestDistance = double.infinity;
 
     for (final point in filteredPoints) {
@@ -230,16 +353,34 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
       }
     }
 
-    if (tappedPoint == null) {
-      if (_selectedPointId != null) {
+    for (final marker in filteredUserMarkers) {
+      final screenLocation = controller.toScreenLocation(
+        Geographic(lon: marker.longitude, lat: marker.latitude),
+      );
+      final distance = (userInput.screenPoint - screenLocation).distance;
+      if (distance <= _tapRadius && distance < bestDistance) {
+        tappedPoint = null;
+        tappedUserMarker = marker;
+        bestDistance = distance;
+      }
+    }
+
+    if (tappedPoint == null && tappedUserMarker == null) {
+      if (_selectedPointId != null || _selectedUserMarkerId != null) {
         setState(() {
           _selectedPointId = null;
+          _selectedUserMarkerId = null;
         });
       }
       return;
     }
 
-    await _focusPoint(tappedPoint);
+    if (tappedUserMarker != null) {
+      await _focusUserMarker(tappedUserMarker);
+      return;
+    }
+
+    await _focusPoint(tappedPoint!);
   }
 
   IconData _categoryIcon(String slug) {
@@ -301,8 +442,11 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
         final filteredPoints = overview.points
             .where(_matchesCategory)
             .toList(growable: false);
+        final filteredUserMarkers = _showUserMarkers
+            ? overview.userMarkers
+            : const <UserMapMarker>[];
 
-        if (overview.points.isEmpty) {
+        if (overview.points.isEmpty && overview.userMarkers.isEmpty) {
           return const AppEmptyState(
             title: "Точек пока нет",
             message: "Когда на сервере появятся точки, они отобразятся здесь.",
@@ -312,16 +456,25 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
         final theme = Theme.of(context);
         final selectedCategoryTitle = _selectedCategoryTitle(sortedCategories);
         final selectedPoint = _selectedPoint(filteredPoints);
+        final selectedUserMarker = _selectedUserMarker(filteredUserMarkers);
         final pointLayers = _groupPointsByAppearance([
           for (final point in filteredPoints)
             if (point.id != selectedPoint?.id) point,
         ]);
+        final userMarkerFeatures = <Feature<Point>>[
+          for (final marker in filteredUserMarkers)
+            if (marker.id != selectedUserMarker?.id)
+              _toUserMarkerFeature(marker),
+        ];
         final selectedAppearance = selectedPoint == null
             ? null
             : _appearanceForPoint(selectedPoint);
         final selectedPointFeatures = selectedPoint == null
             ? const <Feature<Point>>[]
             : <Feature<Point>>[_toFeature(selectedPoint)];
+        final selectedUserMarkerFeatures = selectedUserMarker == null
+            ? const <Feature<Point>>[]
+            : <Feature<Point>>[_toUserMarkerFeature(selectedUserMarker)];
 
         return Stack(
           children: [
@@ -346,7 +499,8 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
               onMapCreated: (controller) {
                 _mapController = controller;
               },
-              onEvent: (event) => _handleMapTap(event, filteredPoints),
+              onEvent: (event) =>
+                  _handleMapTap(event, filteredPoints, filteredUserMarkers),
               layers: [
                 for (final layer in pointLayers)
                   CircleLayer(
@@ -355,6 +509,31 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                     color: layer.appearance.color,
                     strokeWidth: 4,
                     strokeColor: layer.appearance.strokeColor,
+                  ),
+                if (userMarkerFeatures.isNotEmpty)
+                  CircleLayer(
+                    points: userMarkerFeatures,
+                    radius: 8,
+                    color: const Color(0xFFC75D3A),
+                    strokeWidth: 3,
+                    strokeColor: const Color(0xFFF4DDD6),
+                  ),
+                if (selectedUserMarkerFeatures.isNotEmpty)
+                  CircleLayer(
+                    points: selectedUserMarkerFeatures,
+                    radius: 17,
+                    color: const Color(0x59C75D3A),
+                    blur: 0.2,
+                    strokeWidth: 2,
+                    strokeColor: const Color(0xFFF4DDD6),
+                  ),
+                if (selectedUserMarkerFeatures.isNotEmpty)
+                  CircleLayer(
+                    points: selectedUserMarkerFeatures,
+                    radius: 10,
+                    color: const Color(0xFFE56E45),
+                    strokeWidth: 4,
+                    strokeColor: const Color(0xFFFFFFFF),
                   ),
                 if (selectedPointFeatures.isNotEmpty)
                   CircleLayer(
@@ -387,8 +566,11 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                           selectedCategoryTitle: selectedCategoryTitle,
                           selectedSlug: _selectedCategorySlug,
                           pointsCount: filteredPoints.length,
+                          userMarkersCount: overview.userMarkers.length,
                           isThreeDimensional: _isThreeDimensional,
                           isExpanded: _filtersExpanded,
+                          showUserMarkers: _showUserMarkers,
+                          isAddingUserMarker: _isAddingUserMarker,
                           categoryIconBuilder: _categoryIcon,
                           categoryColorBuilder: (category) =>
                               getMapPointAppearance(category).color,
@@ -401,6 +583,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                             setState(() {
                               _selectedCategorySlug = slug;
                               _selectedPointId = null;
+                              _selectedUserMarkerId = null;
                             });
                           },
                           onToggleExpanded: () {
@@ -409,12 +592,38 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                             });
                           },
                           onTogglePerspective: _togglePerspective,
+                          onToggleUserMarkers: () {
+                            setState(() {
+                              _showUserMarkers = !_showUserMarkers;
+                              _selectedUserMarkerId = null;
+                            });
+                          },
+                          onToggleAddUserMarker: () {
+                            final authState = ref.read(authControllerProvider);
+                            if (!authState.isAuthenticated) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Войдите, чтобы добавить метку",
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setState(() {
+                              _isAddingUserMarker = !_isAddingUserMarker;
+                              _selectedPointId = null;
+                              _selectedUserMarkerId = null;
+                            });
+                          },
                           onReset: _selectedCategorySlug == "all"
                               ? null
                               : () {
                                   setState(() {
                                     _selectedCategorySlug = "all";
                                     _selectedPointId = null;
+                                    _selectedUserMarkerId = null;
                                   });
                                 },
                         ),
@@ -425,6 +634,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                               setState(() {
                                 _selectedCategorySlug = "all";
                                 _selectedPointId = null;
+                                _selectedUserMarkerId = null;
                               });
                             },
                           ),
@@ -456,10 +666,12 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
               right: 132,
               bottom: 14,
               child: IgnorePointer(
-                ignoring: selectedPoint != null,
+                ignoring: selectedPoint != null || selectedUserMarker != null,
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 180),
-                  opacity: selectedPoint == null ? 1 : 0,
+                  opacity: selectedPoint == null && selectedUserMarker == null
+                      ? 1
+                      : 0,
                   child: SafeArea(
                     top: false,
                     child: Align(
@@ -476,7 +688,9 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          "Нажмите на точку, чтобы открыть подробности",
+                          _isAddingUserMarker
+                              ? "Нажмите на карту, чтобы поставить метку"
+                              : "Нажмите на точку, чтобы открыть подробности",
                           style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -501,14 +715,19 @@ class _MapFilterPanel extends StatelessWidget {
     required this.selectedCategoryTitle,
     required this.selectedSlug,
     required this.pointsCount,
+    required this.userMarkersCount,
     required this.isThreeDimensional,
     required this.isExpanded,
+    required this.showUserMarkers,
+    required this.isAddingUserMarker,
     required this.categoryIconBuilder,
     required this.categoryColorBuilder,
     required this.countForCategory,
     required this.onCategorySelected,
     required this.onToggleExpanded,
     required this.onTogglePerspective,
+    required this.onToggleUserMarkers,
+    required this.onToggleAddUserMarker,
     required this.onReset,
   });
 
@@ -517,14 +736,19 @@ class _MapFilterPanel extends StatelessWidget {
   final String selectedCategoryTitle;
   final String selectedSlug;
   final int pointsCount;
+  final int userMarkersCount;
   final bool isThreeDimensional;
   final bool isExpanded;
+  final bool showUserMarkers;
+  final bool isAddingUserMarker;
   final IconData Function(String slug) categoryIconBuilder;
   final Color Function(EcoMapCategory? category) categoryColorBuilder;
   final int Function(String slug, List<EcoMapPoint> points) countForCategory;
   final ValueChanged<String> onCategorySelected;
   final VoidCallback onToggleExpanded;
   final VoidCallback onTogglePerspective;
+  final VoidCallback onToggleUserMarkers;
+  final VoidCallback onToggleAddUserMarker;
   final VoidCallback? onReset;
 
   @override
@@ -549,6 +773,7 @@ class _MapFilterPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -574,31 +799,65 @@ class _MapFilterPanel extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton.filledTonal(
-                onPressed: onToggleExpanded,
-                tooltip: isExpanded ? "Скрыть фильтры" : "Показать фильтры",
-                icon: const Icon(Icons.filter_alt_rounded),
-              ),
               const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: onTogglePerspective,
-                tooltip: isThreeDimensional
-                    ? "Переключить в 2D"
-                    : "Переключить в 3D",
-                icon: Icon(
-                  isThreeDimensional
-                      ? Icons.view_in_ar_rounded
-                      : Icons.flip_to_front_outlined,
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      IconButton.filledTonal(
+                        onPressed: onToggleExpanded,
+                        tooltip: isExpanded
+                            ? "Скрыть фильтры"
+                            : "Показать фильтры",
+                        icon: const Icon(Icons.filter_alt_rounded),
+                      ),
+                      IconButton.filledTonal(
+                        onPressed: onTogglePerspective,
+                        tooltip: isThreeDimensional
+                            ? "Переключить в 2D"
+                            : "Переключить в 3D",
+                        icon: Icon(
+                          isThreeDimensional
+                              ? Icons.view_in_ar_rounded
+                              : Icons.flip_to_front_outlined,
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        onPressed: onToggleUserMarkers,
+                        tooltip: showUserMarkers
+                            ? "Скрыть метки людей"
+                            : "Показать метки людей",
+                        icon: Icon(
+                          showUserMarkers
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        onPressed: onToggleAddUserMarker,
+                        tooltip: isAddingUserMarker
+                            ? "Отменить добавление"
+                            : "Добавить место",
+                        icon: Icon(
+                          isAddingUserMarker
+                              ? Icons.location_searching_outlined
+                              : Icons.add_location_alt_outlined,
+                        ),
+                      ),
+                      if (onReset != null)
+                        IconButton.filledTonal(
+                          onPressed: onReset,
+                          tooltip: "Сбросить фильтр",
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              if (onReset != null) ...[
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: onReset,
-                  tooltip: "Сбросить фильтр",
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
             ],
           ),
           AnimatedCrossFade(
@@ -622,6 +881,15 @@ class _MapFilterPanel extends StatelessWidget {
                       accentColor: const Color(0xFF56616F),
                       selected: selectedSlug == "all",
                       onTap: () => onCategorySelected("all"),
+                    ),
+                    const SizedBox(width: 10),
+                    _FilterOptionChip(
+                      label: "Метки людей",
+                      count: userMarkersCount,
+                      icon: Icons.person_pin_circle_outlined,
+                      accentColor: const Color(0xFFC75D3A),
+                      selected: showUserMarkers,
+                      onTap: onToggleUserMarkers,
                     ),
                     for (final category in categories) ...[
                       const SizedBox(width: 10),
@@ -835,6 +1103,271 @@ class _EmptyFilterCard extends StatelessWidget {
           const SizedBox(width: 12),
           OutlinedButton(onPressed: onReset, child: const Text("Сбросить")),
         ],
+      ),
+    );
+  }
+}
+
+class _CreateUserMarkerSheet extends ConsumerStatefulWidget {
+  const _CreateUserMarkerSheet({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final double latitude;
+  final double longitude;
+
+  @override
+  ConsumerState<_CreateUserMarkerSheet> createState() =>
+      _CreateUserMarkerSheetState();
+}
+
+class _CreateUserMarkerSheetState
+    extends ConsumerState<_CreateUserMarkerSheet> {
+  static const List<String> _mediaExtensions = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "mp4",
+    "mov",
+    "m4v",
+    "webm",
+  ];
+
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final List<UserMapMarkerMediaInput> _media = [];
+
+  bool _isPublic = true;
+  bool _isUploadingMedia = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndUploadMedia() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _mediaExtensions,
+        allowMultiple: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final paths = result.files
+          .map((file) => file.path)
+          .whereType<String>()
+          .toList(growable: false);
+      if (paths.isEmpty) {
+        setState(() {
+          _errorMessage = "Не удалось получить выбранные файлы";
+        });
+        return;
+      }
+
+      setState(() {
+        _isUploadingMedia = true;
+        _errorMessage = null;
+      });
+
+      final uploader = ref.read(imageUploadServiceProvider);
+      final uploaded = <UserMapMarkerMediaInput>[];
+      for (final path in paths) {
+        final media = await uploader.uploadMedia(path);
+        uploaded.add(
+          UserMapMarkerMediaInput(
+            mediaUrl: media.url,
+            mediaType: media.mediaType,
+          ),
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _media.addAll(uploaded);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = humanizeNetworkError(
+          error,
+          fallback: "Не удалось загрузить фото или видео",
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingMedia = false;
+        });
+      }
+    }
+  }
+
+  void _removeMedia(int index) {
+    setState(() {
+      _media.removeAt(index);
+    });
+  }
+
+  void _submit() {
+    if (_isUploadingMedia || !_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      UserMapMarkerInput(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        latitude: widget.latitude,
+        longitude: widget.longitude,
+        isPublic: _isPublic,
+        media: List.unmodifiable(_media),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + bottomInset),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Новое место",
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "${widget.latitude.toStringAsFixed(6)}, ${widget.longitude.toStringAsFixed(6)}",
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            TextFormField(
+              controller: _titleController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: "Название"),
+              validator: (value) {
+                if ((value ?? "").trim().length < 3) {
+                  return "Укажите название";
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _descriptionController,
+              minLines: 4,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: "Что здесь интересного",
+                alignLabelWithHint: true,
+              ),
+              validator: (value) {
+                if ((value ?? "").trim().length < 10) {
+                  return "Добавьте описание";
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            CheckboxListTile(
+              value: _isPublic,
+              onChanged: (value) {
+                setState(() {
+                  _isPublic = value ?? true;
+                });
+              },
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text("Показывать другим пользователям"),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "Фото и видео",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _isUploadingMedia ? null : _pickAndUploadMedia,
+                  icon: const Icon(Icons.attach_file_outlined),
+                  label: Text(_isUploadingMedia ? "Загрузка..." : "Добавить"),
+                ),
+              ],
+            ),
+            if (_media.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var index = 0; index < _media.length; index++)
+                    InputChip(
+                      avatar: Icon(
+                        _media[index].mediaType == "video"
+                            ? Icons.play_circle_outline
+                            : Icons.image_outlined,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _media[index].mediaType == "video"
+                            ? "Видео ${index + 1}"
+                            : "Фото ${index + 1}",
+                      ),
+                      onDeleted: () => _removeMedia(index),
+                    ),
+                ],
+              ),
+            ],
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isUploadingMedia ? null : _submit,
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text("Добавить место"),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -177,4 +177,33 @@ class SupportRemoteDataSource {
       Map<String, dynamic>.from(response.data as Map),
     );
   }
+
+  Future<SupportReport> createUserMarkerReport({
+    required int markerId,
+    required String reason,
+    required String details,
+  }) async {
+    final response = await _dio.post(
+      "/map/user-markers/$markerId/report",
+      data: {"reason": reason, "details": details},
+    );
+    return SupportReport.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
+  Future<SupportReport> createUserMarkerCommentReport({
+    required int markerId,
+    required int commentId,
+    required String reason,
+    required String details,
+  }) async {
+    final response = await _dio.post(
+      "/map/user-markers/$markerId/comments/$commentId/report",
+      data: {"reason": reason, "details": details},
+    );
+    return SupportReport.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
 }

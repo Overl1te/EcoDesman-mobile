@@ -4,6 +4,7 @@ import "../../../../core/network/error_message.dart";
 import "../../data/repositories/map_repository_impl.dart";
 import "../../domain/models/eco_map_point_detail.dart";
 import "../../domain/models/map_overview.dart";
+import "../../domain/models/user_map_marker_detail.dart";
 
 final mapControllerProvider = AsyncNotifierProvider<MapController, MapOverview>(
   MapController.new,
@@ -15,6 +16,11 @@ final mapPointDetailProvider = FutureProvider.family<EcoMapPointDetail, int>((
 ) {
   return ref.read(mapRepositoryProvider).fetchPointDetail(pointId);
 });
+
+final userMapMarkerDetailProvider =
+    FutureProvider.family<UserMapMarkerDetail, int>((ref, markerId) {
+      return ref.read(mapRepositoryProvider).fetchUserMarkerDetail(markerId);
+    });
 
 class MapController extends AsyncNotifier<MapOverview> {
   @override

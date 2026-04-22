@@ -562,6 +562,8 @@ class SupportReport {
     required this.postId,
     required this.commentId,
     required this.reviewId,
+    required this.userMarkerId,
+    required this.userMarkerCommentId,
   });
 
   final int id;
@@ -580,6 +582,8 @@ class SupportReport {
   final int? postId;
   final int? commentId;
   final int? reviewId;
+  final int? userMarkerId;
+  final int? userMarkerCommentId;
 
   factory SupportReport.fromJson(Map<String, dynamic> json) {
     final rawReviewedBy = json["reviewed_by"];
@@ -607,6 +611,8 @@ class SupportReport {
       postId: json["post_id"] as int?,
       commentId: json["comment_id"] as int?,
       reviewId: json["review_id"] as int?,
+      userMarkerId: json["user_marker_id"] as int?,
+      userMarkerCommentId: json["user_marker_comment_id"] as int?,
     );
   }
 }
@@ -665,6 +671,10 @@ String getSupportReportTargetLabel(String value) {
       return "Комментарий";
     case "map_review":
       return "Отзыв на карте";
+    case "user_marker":
+      return "Метка на карте";
+    case "user_marker_comment":
+      return "Комментарий к метке";
     default:
       return "Пост";
   }

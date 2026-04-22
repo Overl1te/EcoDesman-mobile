@@ -137,4 +137,32 @@ class SupportRepositoryImpl implements SupportRepository {
       details: details,
     );
   }
+
+  @override
+  Future<SupportReport> createUserMarkerReport({
+    required int markerId,
+    required String reason,
+    required String details,
+  }) {
+    return _remoteDataSource.createUserMarkerReport(
+      markerId: markerId,
+      reason: reason,
+      details: details,
+    );
+  }
+
+  @override
+  Future<SupportReport> createUserMarkerCommentReport({
+    required int markerId,
+    required int commentId,
+    required String reason,
+    required String details,
+  }) {
+    return _remoteDataSource.createUserMarkerCommentReport(
+      markerId: markerId,
+      commentId: commentId,
+      reason: reason,
+      details: details,
+    );
+  }
 }
