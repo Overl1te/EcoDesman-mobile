@@ -33,6 +33,16 @@ class HelpInfoScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _openRepository(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Не удалось открыть репозиторий")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final contentAsync = ref.watch(helpCenterContentProvider);
@@ -102,6 +112,30 @@ class HelpInfoScreen extends ConsumerWidget {
                           icon: const Icon(Icons.download_outlined),
                           label: const Text("Скачать PDF"),
                         ),
+                      OutlinedButton.icon(
+                        onPressed: () => _openRepository(
+                          context,
+                          "https://github.com/Overl1te/EcoDesman-server",
+                        ),
+                        icon: const Icon(Icons.code_outlined),
+                        label: const Text("Backend"),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _openRepository(
+                          context,
+                          "https://github.com/Overl1te/EcoDesman-web",
+                        ),
+                        icon: const Icon(Icons.web_outlined),
+                        label: const Text("Web"),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _openRepository(
+                          context,
+                          "https://github.com/Overl1te/EcoDesman-mobile",
+                        ),
+                        icon: const Icon(Icons.phone_android_outlined),
+                        label: const Text("Mobile"),
+                      ),
                     ],
                   ),
                 ],
