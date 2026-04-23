@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
 import "../../../../core/network/error_message.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/utils/date_formatter.dart";
 import "../../../../shared/widgets/remote_avatar.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
@@ -351,9 +352,19 @@ class _EventsPlaceholderScreenState
                   child: _EventAgendaCard(
                     entry: entry,
                     isUpdating: _isUpdating,
-                    onOpen: () => context.push("/posts/${entry.id}"),
-                    onAuthorTap: () =>
-                        context.push("/profiles/${entry.author.id}"),
+                    onOpen: () => context.push(
+                      AppRoutes.postDetail(
+                        postId: entry.id,
+                        authorUsername: entry.author.username,
+                        postSlug: entry.slug,
+                      ),
+                    ),
+                    onAuthorTap: () => context.push(
+                      AppRoutes.profile(
+                        userId: entry.author.id,
+                        username: entry.author.username,
+                      ),
+                    ),
                     onToggleCancelled: entry.canEdit
                         ? () => _toggleEventCancelled(entry)
                         : null,

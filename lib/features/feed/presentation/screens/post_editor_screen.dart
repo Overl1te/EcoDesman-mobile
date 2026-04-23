@@ -5,6 +5,7 @@ import "package:go_router/go_router.dart";
 
 import "../../../../core/network/error_message.dart";
 import "../../../../core/network/image_upload_service.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/utils/date_formatter.dart";
 import "../../../../shared/widgets/app_error_state.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
@@ -267,13 +268,22 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
       ref.invalidate(postsCollectionControllerProvider(defaultEventsQuery));
       ref.invalidate(postsCollectionControllerProvider(favoritePostsQuery));
       ref.invalidate(userPostsProvider(saved.author.id));
-      ref.invalidate(publicProfileProvider(saved.author.id));
+      for (final lookup in AppRoutes.profileLookups(
+        userId: saved.author.id,
+        username: saved.author.username,
+      )) {
+        ref.invalidate(publicProfileProvider(lookup));
+      }
       if (saved.author.id != currentUser.id) {
         ref.invalidate(userPostsProvider(currentUser.id));
       }
       if (widget.postId != null) {
         ref
-            .read(postDetailsControllerProvider(widget.postId!).notifier)
+            .read(
+              postDetailsControllerProvider(
+                PostRouteTarget.byId(widget.postId!),
+              ).notifier,
+            )
             .replacePost(saved);
       }
 
@@ -290,7 +300,13 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
       if (widget.isEditing) {
         context.pop();
       } else {
-        context.go("/posts/${saved.id}");
+        context.go(
+          AppRoutes.postDetail(
+            postId: saved.id,
+            authorUsername: saved.author.username,
+            postSlug: saved.slug,
+          ),
+        );
       }
     } catch (error) {
       setState(() {
@@ -342,7 +358,7 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
 
     if (widget.isEditing) {
       final postAsync = ref.watch(
-        postDetailsControllerProvider(widget.postId!),
+        postDetailsControllerProvider(PostRouteTarget.byId(widget.postId!)),
       );
       return Scaffold(
         appBar: AppBar(title: const Text("Редактирование поста")),
@@ -353,7 +369,11 @@ class _PostEditorScreenState extends ConsumerState<PostEditorScreen> {
               title: "Не удалось открыть пост",
               message: "Попробуйте снова чуть позже.",
               onRetry: () {
-                ref.invalidate(postDetailsControllerProvider(widget.postId!));
+                ref.invalidate(
+                  postDetailsControllerProvider(
+                    PostRouteTarget.byId(widget.postId!),
+                  ),
+                );
               },
             );
           },

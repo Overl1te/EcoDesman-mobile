@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/utils/date_formatter.dart";
 import "../../../../shared/widgets/app_empty_state.dart";
 import "../../../../shared/widgets/remote_avatar.dart";
@@ -83,8 +84,19 @@ class NotificationsScreen extends ConsumerWidget {
                         );
                         return;
                       }
-                      if (notification.postId != null) {
-                        context.push("/posts/${notification.postId}");
+                      final hasCanonicalPostTarget =
+                          (notification.postAuthorUsername?.trim().isNotEmpty ??
+                              false) &&
+                          (notification.postSlug?.trim().isNotEmpty ?? false);
+                      if (notification.postId != null ||
+                          hasCanonicalPostTarget) {
+                        context.push(
+                          AppRoutes.postDetail(
+                            postId: notification.postId,
+                            authorUsername: notification.postAuthorUsername,
+                            postSlug: notification.postSlug,
+                          ),
+                        );
                       }
                     },
                   ),

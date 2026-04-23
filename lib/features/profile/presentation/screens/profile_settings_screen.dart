@@ -7,6 +7,7 @@ import "package:go_router/go_router.dart";
 import "package:image_cropper/image_cropper.dart";
 
 import "../../../../core/network/image_upload_service.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/theme/theme_mode_controller.dart";
 import "../../../../shared/widgets/remote_avatar.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
@@ -91,8 +92,24 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     return "https://$trimmed";
   }
 
-  void _invalidateProfileData(int userId) {
-    ref.invalidate(publicProfileProvider(userId));
+  void _invalidateProfileData({
+    required int userId,
+    Iterable<String> usernames = const [],
+  }) {
+    for (final lookup in AppRoutes.profileLookups(userId: userId)) {
+      ref.invalidate(publicProfileProvider(lookup));
+    }
+    for (final username in usernames) {
+      final normalizedUsername = username.trim();
+      if (normalizedUsername.isEmpty) {
+        continue;
+      }
+      ref.invalidate(
+        publicProfileProvider(
+          ProfileRouteTarget.byUsername(normalizedUsername),
+        ),
+      );
+    }
     ref.invalidate(userPostsProvider(userId));
     ref.invalidate(feedControllerProvider);
     ref.invalidate(postsCollectionControllerProvider(favoritePostsQuery));
@@ -109,7 +126,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     }
 
     if (success && updatedUser != null) {
-      _invalidateProfileData(updatedUser.id);
+      _invalidateProfileData(
+        userId: updatedUser.id,
+        usernames: [updatedUser.username],
+      );
       setState(() {
         _avatarUrl = updatedUser.avatarUrl;
         _avatarCacheBuster = DateTime.now().millisecondsSinceEpoch.toString();
@@ -529,8 +549,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     }
 
     if (success) {
+      final updatedUser = ref.read(authControllerProvider).user;
       if (currentUser != null) {
-        _invalidateProfileData(currentUser.id);
+        _invalidateProfileData(
+          userId: currentUser.id,
+          usernames: [
+            currentUser.username,
+            if (updatedUser != null) updatedUser.username,
+          ],
+        );
       }
       context.pop();
       ScaffoldMessenger.of(

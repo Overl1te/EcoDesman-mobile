@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
+import "../../../../core/routing/app_routes.dart";
 import "../../../../shared/widgets/app_empty_state.dart";
 import "../../../../shared/widgets/app_error_state.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
@@ -196,7 +197,13 @@ class ProfileScreen extends ConsumerWidget {
                   for (final post in page.items) ...[
                     PostCard(
                       post: post,
-                      onTap: () => context.push("/posts/${post.id}"),
+                      onTap: () => context.push(
+                        AppRoutes.postDetail(
+                          postId: post.id,
+                          authorUsername: post.author.username,
+                          postSlug: post.slug,
+                        ),
+                      ),
                       onAuthorTap: () {},
                       onLikeTap: () async {
                         await ref

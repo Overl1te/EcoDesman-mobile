@@ -20,6 +20,11 @@ abstract class PostsRepository {
 
   Future<PostDetails> fetchPostDetails(int postId);
 
+  Future<PostDetails> fetchPostDetailsBySlug({
+    required String authorUsername,
+    required String postSlug,
+  });
+
   Future<LikeState> likePost(int postId);
 
   Future<LikeState> unlikePost(int postId);

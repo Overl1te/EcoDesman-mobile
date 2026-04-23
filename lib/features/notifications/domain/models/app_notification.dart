@@ -31,6 +31,8 @@ class AppNotification {
     required this.createdAt,
     required this.actor,
     required this.postId,
+    required this.postSlug,
+    required this.postAuthorUsername,
     required this.commentId,
     required this.supportThreadId,
     required this.reportId,
@@ -44,6 +46,8 @@ class AppNotification {
   final DateTime createdAt;
   final NotificationActor actor;
   final int? postId;
+  final String? postSlug;
+  final String? postAuthorUsername;
   final int? commentId;
   final int? supportThreadId;
   final int? reportId;
@@ -58,6 +62,8 @@ class AppNotification {
       createdAt: createdAt,
       actor: actor,
       postId: postId,
+      postSlug: postSlug,
+      postAuthorUsername: postAuthorUsername,
       commentId: commentId,
       supportThreadId: supportThreadId,
       reportId: reportId,
@@ -76,6 +82,8 @@ class AppNotification {
         Map<String, dynamic>.from(json["actor"] as Map),
       ),
       postId: json["post_id"] as int?,
+      postSlug: json["post_slug"] as String?,
+      postAuthorUsername: json["post_author_username"] as String?,
       commentId: json["comment_id"] as int?,
       supportThreadId: json["support_thread_id"] as int?,
       reportId: json["report_id"] as int?,

@@ -171,6 +171,11 @@ class AuthRemoteDataSource {
     return AppUser.fromJson(Map<String, dynamic>.from(response.data as Map));
   }
 
+  Future<AppUser> fetchPublicProfileByUsername(String username) async {
+    final response = await _dio.get("/profiles/by-username/$username");
+    return AppUser.fromJson(Map<String, dynamic>.from(response.data as Map));
+  }
+
   Future<List<AppUser>> searchUsers(String query) async {
     final response = await _dio.get(
       "/users",

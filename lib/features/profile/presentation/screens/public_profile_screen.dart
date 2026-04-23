@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
+import "../../../../core/routing/app_routes.dart";
 import "../../../../shared/widgets/app_empty_state.dart";
 import "../../../../shared/widgets/app_error_state.dart";
 import "../../../auth/data/repositories/auth_repository_impl.dart";
@@ -12,9 +13,15 @@ import "../controllers/profile_controller.dart";
 import "../widgets/profile_summary_card.dart";
 
 class PublicProfileScreen extends ConsumerStatefulWidget {
-  const PublicProfileScreen({super.key, required this.userId});
+  const PublicProfileScreen({super.key, required this.target});
 
-  final int userId;
+  PublicProfileScreen.byId({super.key, required int userId})
+    : target = ProfileRouteTarget.byId(userId);
+
+  PublicProfileScreen.byUsername({super.key, required String username})
+    : target = ProfileRouteTarget.byUsername(username);
+
+  final ProfileRouteTarget target;
 
   @override
   ConsumerState<PublicProfileScreen> createState() =>
@@ -25,12 +32,10 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
   bool _isBusy = false;
 
   Future<void> _refreshData() async {
-    ref.invalidate(publicProfileProvider(widget.userId));
-    ref.invalidate(userPostsProvider(widget.userId));
-    await Future.wait([
-      ref.refresh(publicProfileProvider(widget.userId).future),
-      ref.refresh(userPostsProvider(widget.userId).future),
-    ]);
+    ref.invalidate(publicProfileProvider(widget.target));
+    final user = await ref.refresh(publicProfileProvider(widget.target).future);
+    ref.invalidate(userPostsProvider(user.id));
+    final _ = await ref.refresh(userPostsProvider(user.id).future);
   }
 
   Future<void> _runModerationAction(
@@ -61,23 +66,24 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profileAsync = ref.watch(publicProfileProvider(widget.userId));
-    final postsAsync = ref.watch(userPostsProvider(widget.userId));
+    final profileAsync = ref.watch(publicProfileProvider(widget.target));
     final authState = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Профиль")),
+      appBar: AppBar(title: const Text("РџСЂРѕС„РёР»СЊ")),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) {
           return AppErrorState(
-            title: "Не удалось открыть профиль",
-            message: "Проверьте подключение и попробуйте снова.",
+            title: "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РїСЂРѕС„РёР»СЊ",
+            message:
+                "РџСЂРѕРІРµСЂСЊС‚Рµ РїРѕРґРєР»СЋС‡РµРЅРёРµ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.",
             onRetry: _refreshData,
           );
         },
         data: (user) {
+          final postsAsync = ref.watch(userPostsProvider(user.id));
           final canAdminister =
               authState.user?.isAdmin == true && authState.user!.id != user.id;
 
@@ -99,11 +105,12 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                       () => ref
                                           .read(authRepositoryProvider)
                                           .warnUser(user.id),
-                                      successMessage: "Предупреждение выдано",
+                                      successMessage:
+                                          "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ РІС‹РґР°РЅРѕ",
                                     );
                                   },
                             icon: const Icon(Icons.warning_amber_rounded),
-                            label: const Text("Предупредить"),
+                            label: const Text("РџСЂРµРґСѓРїСЂРµРґРёС‚СЊ"),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: _isBusy
@@ -118,15 +125,17 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                                 .read(authRepositoryProvider)
                                                 .banUser(user.id),
                                       successMessage: user.isBanned
-                                          ? "Пользователь разблокирован"
-                                          : "Пользователь заблокирован",
+                                          ? "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІР°РЅ"
+                                          : "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ",
                                     );
                                   },
                             icon: Icon(
                               user.isBanned ? Icons.lock_open : Icons.block,
                             ),
                             label: Text(
-                              user.isBanned ? "Разбанить" : "Забанить",
+                              user.isBanned
+                                  ? "Р Р°Р·Р±Р°РЅРёС‚СЊ"
+                                  : "Р—Р°Р±Р°РЅРёС‚СЊ",
                             ),
                           ),
                           DropdownButtonHideUnderline(
@@ -135,15 +144,15 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                               items: const [
                                 DropdownMenuItem(
                                   value: "user",
-                                  child: Text("Пользователь"),
+                                  child: Text("РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ"),
                                 ),
                                 DropdownMenuItem(
                                   value: "moderator",
-                                  child: Text("Модератор"),
+                                  child: Text("РњРѕРґРµСЂР°С‚РѕСЂ"),
                                 ),
                                 DropdownMenuItem(
                                   value: "admin",
-                                  child: Text("Админ"),
+                                  child: Text("РђРґРјРёРЅ"),
                                 ),
                               ],
                               onChanged: _isBusy
@@ -159,7 +168,8 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                               userId: user.id,
                                               role: value,
                                             ),
-                                        successMessage: "Роль обновлена",
+                                        successMessage:
+                                            "Р РѕР»СЊ РѕР±РЅРѕРІР»РµРЅР°",
                                       );
                                     },
                             ),
@@ -169,7 +179,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  "Публикации",
+                  "РџСѓР±Р»РёРєР°С†РёРё",
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -182,19 +192,21 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                   ),
                   error: (error, stackTrace) {
                     return AppErrorState(
-                      title: "Не удалось загрузить посты",
-                      message: "Попробуйте обновить страницу профиля.",
+                      title:
+                          "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РїРѕСЃС‚С‹",
+                      message:
+                          "РџРѕРїСЂРѕР±СѓР№С‚Рµ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂР°РЅРёС†Сѓ РїСЂРѕС„РёР»СЏ.",
                       onRetry: () {
-                        ref.invalidate(userPostsProvider(widget.userId));
+                        ref.invalidate(userPostsProvider(user.id));
                       },
                     );
                   },
                   data: (page) {
                     if (page.items.isEmpty) {
                       return const AppEmptyState(
-                        title: "Пока нет публикаций",
+                        title: "РџРѕРєР° РЅРµС‚ РїСѓР±Р»РёРєР°С†РёР№",
                         message:
-                            "Как только пользователь опубликует посты, они появятся здесь.",
+                            "РљР°Рє С‚РѕР»СЊРєРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РѕРїСѓР±Р»РёРєСѓРµС‚ РїРѕСЃС‚С‹, РѕРЅРё РїРѕСЏРІСЏС‚СЃСЏ Р·РґРµСЃСЊ.",
                       );
                     }
 
@@ -203,7 +215,13 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         for (final post in page.items) ...[
                           PostCard(
                             post: post,
-                            onTap: () => context.push("/posts/${post.id}"),
+                            onTap: () => context.push(
+                              AppRoutes.postDetail(
+                                postId: post.id,
+                                authorUsername: post.author.username,
+                                postSlug: post.slug,
+                              ),
+                            ),
                             onAuthorTap: () {},
                           ),
                           const SizedBox(height: 12),

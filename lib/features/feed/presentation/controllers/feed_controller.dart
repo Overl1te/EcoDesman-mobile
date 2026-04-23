@@ -1,10 +1,12 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../../../../core/network/error_message.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../auth/presentation/controllers/auth_controller.dart";
 import "../../../profile/presentation/controllers/profile_controller.dart";
 import "../../data/repositories/posts_repository_impl.dart";
 import "../../domain/models/feed_post.dart";
+import "../../domain/models/post_author.dart";
 import "../../domain/models/post_details.dart";
 import "../../domain/models/posts_query.dart";
 
@@ -55,9 +57,55 @@ final feedControllerProvider = postsCollectionControllerProvider(
 );
 
 final postDetailsControllerProvider =
-    AsyncNotifierProvider.family<PostDetailsController, PostDetails, int>(
-      PostDetailsController.new,
+    AsyncNotifierProvider.family<
+      PostDetailsController,
+      PostDetails,
+      PostRouteTarget
+    >(PostDetailsController.new);
+
+void _invalidatePostDetailsLookups(Ref ref, PostRouteTarget target) {
+  if (target.hasPostId) {
+    ref.invalidate(
+      postDetailsControllerProvider(PostRouteTarget.byId(target.postId!)),
     );
+  }
+  if (target.hasCanonicalLookup) {
+    ref.invalidate(
+      postDetailsControllerProvider(
+        PostRouteTarget.bySlug(
+          authorUsername: target.normalizedAuthorUsername,
+          postSlug: target.normalizedPostSlug,
+        ),
+      ),
+    );
+  }
+}
+
+void _invalidateAuthorLookups(Ref ref, PostAuthor author) {
+  ref.invalidate(userPostsProvider(author.id));
+  ref.invalidate(publicProfileProvider(ProfileRouteTarget.byId(author.id)));
+  if (author.username.trim().isNotEmpty) {
+    ref.invalidate(
+      publicProfileProvider(ProfileRouteTarget.byUsername(author.username)),
+    );
+  }
+}
+
+PostRouteTarget _postRouteTargetFromFeedPost(FeedPost post) {
+  return AppRoutes.postTarget(
+    postId: post.id,
+    authorUsername: post.author.username,
+    postSlug: post.slug,
+  );
+}
+
+PostRouteTarget _postRouteTargetFromDetails(PostDetails post) {
+  return AppRoutes.postTarget(
+    postId: post.id,
+    authorUsername: post.author.username,
+    postSlug: post.slug,
+  );
+}
 
 class PostsCollectionController extends AsyncNotifier<FeedState> {
   PostsCollectionController(this._query);
@@ -125,7 +173,7 @@ class PostsCollectionController extends AsyncNotifier<FeedState> {
         ],
       ),
     );
-    ref.invalidate(postDetailsControllerProvider(post.id));
+    _invalidatePostDetailsLookups(ref, _postRouteTargetFromFeedPost(post));
   }
 
   Future<void> toggleFavorite(FeedPost post) async {
@@ -156,7 +204,7 @@ class PostsCollectionController extends AsyncNotifier<FeedState> {
       removePost(post.id);
     }
 
-    ref.invalidate(postDetailsControllerProvider(post.id));
+    _invalidatePostDetailsLookups(ref, _postRouteTargetFromFeedPost(post));
     ref.invalidate(postsCollectionControllerProvider(favoritePostsQuery));
   }
 
@@ -171,6 +219,7 @@ class PostsCollectionController extends AsyncNotifier<FeedState> {
         : post.images.first.imageUrl;
     final nextItem = FeedPost(
       id: post.id,
+      slug: post.slug,
       title: post.title,
       body: post.body,
       previewText: post.body,
@@ -246,20 +295,18 @@ class PostsCollectionController extends AsyncNotifier<FeedState> {
 }
 
 class PostDetailsController extends AsyncNotifier<PostDetails> {
-  PostDetailsController(this.postId);
+  PostDetailsController(this.target);
 
-  final int postId;
+  final PostRouteTarget target;
 
   @override
   Future<PostDetails> build() {
-    return ref.read(postsRepositoryProvider).fetchPostDetails(postId);
+    return _fetchPost();
   }
 
   Future<void> refreshPost() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() {
-      return ref.read(postsRepositoryProvider).fetchPostDetails(postId);
-    });
+    state = await AsyncValue.guard(_fetchPost);
   }
 
   void _invalidateCoreCollections(PostDetails post) {
@@ -268,8 +315,18 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
     if (post.kind == "event") {
       ref.invalidate(postsCollectionControllerProvider(defaultEventsQuery));
     }
-    ref.invalidate(userPostsProvider(post.author.id));
-    ref.invalidate(publicProfileProvider(post.author.id));
+    _invalidateAuthorLookups(ref, post.author);
+  }
+
+  Future<PostDetails> _fetchPost() {
+    final repository = ref.read(postsRepositoryProvider);
+    if (target.hasCanonicalLookup) {
+      return repository.fetchPostDetailsBySlug(
+        authorUsername: target.normalizedAuthorUsername,
+        postSlug: target.normalizedPostSlug,
+      );
+    }
+    return repository.fetchPostDetails(target.postId!);
   }
 
   Future<void> toggleLike() async {
@@ -280,8 +337,8 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
     }
 
     final likeState = current.isLiked
-        ? await ref.read(postsRepositoryProvider).unlikePost(postId)
-        : await ref.read(postsRepositoryProvider).likePost(postId);
+        ? await ref.read(postsRepositoryProvider).unlikePost(current.id)
+        : await ref.read(postsRepositoryProvider).likePost(current.id);
     final updated = current.copyWith(
       likesCount: likeState.likesCount,
       isLiked: likeState.isLiked,
@@ -299,8 +356,8 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
     }
 
     final favoriteState = current.isFavorited
-        ? await ref.read(postsRepositoryProvider).unfavoritePost(postId)
-        : await ref.read(postsRepositoryProvider).favoritePost(postId);
+        ? await ref.read(postsRepositoryProvider).unfavoritePost(current.id)
+        : await ref.read(postsRepositoryProvider).favoritePost(current.id);
     final updated = current.copyWith(
       favoritesCount: favoriteState.favoritesCount,
       isFavorited: favoriteState.isFavorited,
@@ -319,7 +376,7 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
 
     final comment = await ref
         .read(postsRepositoryProvider)
-        .addComment(postId: postId, body: body);
+        .addComment(postId: current.id, body: body);
     final updated = current.copyWith(
       comments: [...current.comments, comment],
       commentsCount: current.commentsCount + 1,
@@ -340,7 +397,7 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
 
     final comment = await ref
         .read(postsRepositoryProvider)
-        .updateComment(postId: postId, commentId: commentId, body: body);
+        .updateComment(postId: current.id, commentId: commentId, body: body);
     final updated = current.copyWith(
       comments: [
         for (final item in current.comments)
@@ -359,7 +416,7 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
 
     await ref
         .read(postsRepositoryProvider)
-        .deleteComment(postId: postId, commentId: commentId);
+        .deleteComment(postId: current.id, commentId: commentId);
     final updated = current.copyWith(
       comments: current.comments.where((item) => item.id != commentId).toList(),
       commentsCount: current.commentsCount > 0 ? current.commentsCount - 1 : 0,
@@ -384,7 +441,7 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
 
     final updated = await ref
         .read(postsRepositoryProvider)
-        .setEventCancelled(postId: postId, isCancelled: isCancelled);
+        .setEventCancelled(postId: current.id, isCancelled: isCancelled);
     state = AsyncData(updated);
     ref.read(feedControllerProvider.notifier).upsertPost(updated);
     _invalidateCoreCollections(updated);
@@ -392,13 +449,20 @@ class PostDetailsController extends AsyncNotifier<PostDetails> {
 
   Future<void> deletePost() async {
     final current = state.asData?.value;
+    final postId = current?.id ?? target.postId;
+    if (postId == null) {
+      return;
+    }
+
     await ref.read(postsRepositoryProvider).deletePost(postId);
     ref.read(feedControllerProvider.notifier).removePost(postId);
     ref.invalidate(postsCollectionControllerProvider(favoritePostsQuery));
     ref.invalidate(postsCollectionControllerProvider(defaultEventsQuery));
     if (current != null) {
-      ref.invalidate(userPostsProvider(current.author.id));
-      ref.invalidate(publicProfileProvider(current.author.id));
+      _invalidateAuthorLookups(ref, current.author);
+      _invalidatePostDetailsLookups(ref, _postRouteTargetFromDetails(current));
+    } else {
+      _invalidatePostDetailsLookups(ref, target);
     }
   }
 }

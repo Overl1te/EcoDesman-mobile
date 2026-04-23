@@ -3,6 +3,7 @@ import "../../../feed/domain/models/post_author.dart";
 class EventCalendarEntry {
   const EventCalendarEntry({
     required this.id,
+    required this.slug,
     required this.title,
     required this.body,
     required this.kind,
@@ -17,6 +18,7 @@ class EventCalendarEntry {
   });
 
   final int id;
+  final String slug;
   final String title;
   final String body;
   final String kind;
@@ -32,6 +34,7 @@ class EventCalendarEntry {
   factory EventCalendarEntry.fromJson(Map<String, dynamic> json) {
     return EventCalendarEntry(
       id: json["id"] as int,
+      slug: json["slug"] as String? ?? "",
       title: json["title"] as String? ?? "",
       body: json["body"] as String? ?? "",
       kind: json["kind"] as String? ?? "",

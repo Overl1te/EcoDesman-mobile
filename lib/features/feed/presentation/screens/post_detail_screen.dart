@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
 import "../../../../core/network/error_message.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/utils/date_formatter.dart";
 import "../../../../shared/widgets/app_error_state.dart";
 import "../../../../shared/widgets/remote_avatar.dart";
@@ -10,15 +11,28 @@ import "../../../auth/presentation/controllers/auth_controller.dart";
 import "../../../profile/presentation/controllers/profile_controller.dart";
 import "../../../support/data/repositories/support_repository_impl.dart";
 import "../../../support/presentation/widgets/report_content_sheet.dart";
+import "../../domain/models/post_author.dart";
 import "../../domain/models/post_comment.dart";
 import "../../domain/models/post_details.dart";
 import "../controllers/feed_controller.dart";
 import "post_images_viewer_screen.dart";
 
 class PostDetailScreen extends ConsumerStatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({super.key, required this.target});
 
-  final int postId;
+  PostDetailScreen.byId({super.key, required int postId})
+    : target = PostRouteTarget.byId(postId);
+
+  PostDetailScreen.bySlug({
+    super.key,
+    required String authorUsername,
+    required String postSlug,
+  }) : target = PostRouteTarget.bySlug(
+         authorUsername: authorUsername,
+         postSlug: postSlug,
+       );
+
+  final PostRouteTarget target;
 
   @override
   ConsumerState<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -34,9 +48,14 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     super.dispose();
   }
 
-  void _invalidateAuthorCaches(int authorId) {
-    ref.invalidate(userPostsProvider(authorId));
-    ref.invalidate(publicProfileProvider(authorId));
+  void _invalidateAuthorCaches(PostAuthor author) {
+    ref.invalidate(userPostsProvider(author.id));
+    for (final lookup in AppRoutes.profileLookups(
+      userId: author.id,
+      username: author.username,
+    )) {
+      ref.invalidate(publicProfileProvider(lookup));
+    }
   }
 
   Future<void> _toggleLike(PostDetails post) async {
@@ -48,9 +67,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .toggleLike();
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось обновить лайк"),
@@ -68,9 +87,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .toggleFavorite();
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось обновить избранное"),
@@ -97,10 +116,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .addComment(text);
       _commentController.clear();
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
     } catch (error) {
       _showSnack(
         humanizeNetworkError(
@@ -153,9 +172,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .updateComment(commentId: comment.id, body: nextBody);
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
     } catch (error) {
       _showSnack(
         humanizeNetworkError(
@@ -197,9 +216,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .deleteComment(comment.id);
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
     } catch (error) {
       _showSnack(
         humanizeNetworkError(error, fallback: "Не удалось удалить комментарий"),
@@ -296,9 +315,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     try {
       await ref
-          .read(postDetailsControllerProvider(widget.postId).notifier)
+          .read(postDetailsControllerProvider(widget.target).notifier)
           .setEventCancelled(!post.isEventCancelled);
-      _invalidateAuthorCaches(post.author.id);
+      _invalidateAuthorCaches(post.author);
       _showSnack(
         post.isEventCancelled
             ? "Мероприятие снова активно"
@@ -318,8 +337,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Future<void> _onMenuAction(String value, PostDetails post) async {
     switch (value) {
       case "edit":
-        await context.push("/posts/${post.id}/edit");
-        _invalidateAuthorCaches(post.author.id);
+        await context.push(AppRoutes.postEditor(post.id));
+        if (!mounted) {
+          return;
+        }
+        final refreshed = await ref.read(
+          postDetailsControllerProvider(PostRouteTarget.byId(post.id)).future,
+        );
+        ref
+            .read(postDetailsControllerProvider(widget.target).notifier)
+            .replacePost(refreshed);
+        _invalidateAuthorCaches(refreshed.author);
         break;
       case "toggle-event":
         await _toggleEventCancelled(post);
@@ -350,9 +378,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           return;
         }
         await ref
-            .read(postDetailsControllerProvider(widget.postId).notifier)
+            .read(postDetailsControllerProvider(widget.target).notifier)
             .deletePost();
-        _invalidateAuthorCaches(post.author.id);
+        _invalidateAuthorCaches(post.author);
         if (mounted) {
           context.pop();
         }
@@ -375,11 +403,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
-    final postAsync = ref.watch(postDetailsControllerProvider(widget.postId));
+    final postAsync = ref.watch(postDetailsControllerProvider(widget.target));
     final theme = Theme.of(context);
 
     ref.listen<AsyncValue<PostDetails>>(
-      postDetailsControllerProvider(widget.postId),
+      postDetailsControllerProvider(widget.target),
       (previous, next) {
         next.whenData((post) {
           ref.read(feedControllerProvider.notifier).upsertPost(post);
@@ -428,14 +456,14 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             title: "Не удалось открыть пост",
             message: "Попробуйте снова чуть позже.",
             onRetry: () {
-              ref.invalidate(postDetailsControllerProvider(widget.postId));
+              ref.invalidate(postDetailsControllerProvider(widget.target));
             },
           );
         },
         data: (post) {
           return RefreshIndicator(
             onRefresh: () => ref
-                .read(postDetailsControllerProvider(widget.postId).notifier)
+                .read(postDetailsControllerProvider(widget.target).notifier)
                 .refreshPost(),
             child: ListView(
               padding: const EdgeInsets.all(20),
@@ -457,7 +485,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   const SizedBox(height: 16),
                 ],
                 InkWell(
-                  onTap: () => context.push("/profiles/${post.author.id}"),
+                  onTap: () => context.push(
+                    AppRoutes.profile(
+                      userId: post.author.id,
+                      username: post.author.username,
+                    ),
+                  ),
                   borderRadius: BorderRadius.circular(20),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,7 +667,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               _CommentTile(
                                 comment: comment,
                                 onAuthorTap: () => context.push(
-                                  "/profiles/${comment.author.id}",
+                                  AppRoutes.profile(
+                                    userId: comment.author.id,
+                                    username: comment.author.username,
+                                  ),
                                 ),
                                 onEdit: comment.canEdit
                                     ? () => _editComment(post, comment)

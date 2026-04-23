@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
+import "../../../../core/routing/app_routes.dart";
 import "../../../auth/data/repositories/auth_repository_impl.dart";
 import "../../../auth/domain/models/app_user.dart";
 import "../../../feed/data/repositories/posts_repository_impl.dart";
@@ -247,8 +248,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                         color: Colors.redAccent,
                                       )
                                     : null,
-                                onTap: () =>
-                                    context.push("/profiles/${user.id}"),
+                                onTap: () => context.push(
+                                  AppRoutes.profile(
+                                    userId: user.id,
+                                    username: user.username,
+                                  ),
+                                ),
                               ),
                           ],
                         ),
@@ -266,9 +271,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       for (final post in data.posts) ...[
                         PostCard(
                           post: post,
-                          onTap: () => context.push("/posts/${post.id}"),
-                          onAuthorTap: () =>
-                              context.push("/profiles/${post.author.id}"),
+                          onTap: () => context.push(
+                            AppRoutes.postDetail(
+                              postId: post.id,
+                              authorUsername: post.author.username,
+                              postSlug: post.slug,
+                            ),
+                          ),
+                          onAuthorTap: () => context.push(
+                            AppRoutes.profile(
+                              userId: post.author.id,
+                              username: post.author.username,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 12),
                       ],

@@ -28,6 +28,8 @@ abstract class AuthRepository {
 
   Future<AppUser> fetchPublicProfile(int userId);
 
+  Future<AppUser> fetchPublicProfileByUsername(String username);
+
   Future<List<AppUser>> searchUsers(String query);
 
   Future<AppUser> warnUser(int userId);

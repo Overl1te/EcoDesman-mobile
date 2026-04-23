@@ -3,6 +3,7 @@ import "post_author.dart";
 class FeedPost {
   const FeedPost({
     required this.id,
+    required this.slug,
     required this.title,
     required this.body,
     required this.previewText,
@@ -29,6 +30,7 @@ class FeedPost {
   });
 
   final int id;
+  final String slug;
   final String title;
   final String body;
   final String previewText;
@@ -56,6 +58,7 @@ class FeedPost {
   bool get isEvent => kind == "event";
 
   FeedPost copyWith({
+    String? slug,
     String? title,
     String? body,
     String? previewText,
@@ -83,6 +86,7 @@ class FeedPost {
   }) {
     return FeedPost(
       id: id,
+      slug: slug ?? this.slug,
       title: title ?? this.title,
       body: body ?? this.body,
       previewText: previewText ?? this.previewText,
@@ -114,6 +118,7 @@ class FeedPost {
   factory FeedPost.fromJson(Map<String, dynamic> json) {
     return FeedPost(
       id: json["id"] as int,
+      slug: json["slug"] as String? ?? "",
       title: json["title"] as String? ?? "",
       body: json["body"] as String? ?? "",
       previewText: json["preview_text"] as String? ?? "",

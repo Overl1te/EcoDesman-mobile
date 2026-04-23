@@ -5,6 +5,7 @@ import "post_image.dart";
 class PostDetails {
   const PostDetails({
     required this.id,
+    required this.slug,
     required this.title,
     required this.body,
     required this.kind,
@@ -31,6 +32,7 @@ class PostDetails {
   });
 
   final int id;
+  final String slug;
   final String title;
   final String body;
   final String kind;
@@ -58,6 +60,7 @@ class PostDetails {
   bool get isEvent => kind == "event";
 
   PostDetails copyWith({
+    String? slug,
     String? title,
     String? body,
     String? kind,
@@ -84,6 +87,7 @@ class PostDetails {
   }) {
     return PostDetails(
       id: id,
+      slug: slug ?? this.slug,
       title: title ?? this.title,
       body: body ?? this.body,
       kind: kind ?? this.kind,
@@ -113,6 +117,7 @@ class PostDetails {
   factory PostDetails.fromJson(Map<String, dynamic> json) {
     return PostDetails(
       id: json["id"] as int,
+      slug: json["slug"] as String? ?? "",
       title: json["title"] as String? ?? "",
       body: json["body"] as String? ?? "",
       kind: json["kind"] as String? ?? "",

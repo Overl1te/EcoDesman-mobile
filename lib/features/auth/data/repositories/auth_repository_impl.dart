@@ -133,6 +133,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AppUser> fetchPublicProfileByUsername(String username) {
+    return _remoteDataSource.fetchPublicProfileByUsername(username);
+  }
+
+  @override
   Future<List<AppUser>> searchUsers(String query) {
     return _remoteDataSource.searchUsers(query);
   }

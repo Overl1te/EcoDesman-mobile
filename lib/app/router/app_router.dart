@@ -38,7 +38,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: "/posts/:postId",
         builder: (context, state) {
           final postId = int.parse(state.pathParameters["postId"]!);
-          return PostDetailScreen(postId: postId);
+          return PostDetailScreen.byId(postId: postId);
         },
       ),
       GoRoute(
@@ -52,7 +52,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: "/profiles/:userId",
         builder: (context, state) {
           final userId = int.parse(state.pathParameters["userId"]!);
-          return PublicProfileScreen(userId: userId);
+          return PublicProfileScreen.byId(userId: userId);
         },
       ),
       GoRoute(
@@ -83,6 +83,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: "/admin", builder: (context, state) => const AdminScreen()),
+      GoRoute(
+        path: "/:username/posts/:postSlug",
+        builder: (context, state) {
+          final username = state.pathParameters["username"]!;
+          final postSlug = state.pathParameters["postSlug"]!;
+          return PostDetailScreen.bySlug(
+            authorUsername: username,
+            postSlug: postSlug,
+          );
+        },
+      ),
+      GoRoute(
+        path: "/:username",
+        builder: (context, state) {
+          final username = state.pathParameters["username"]!;
+          return PublicProfileScreen.byUsername(username: username);
+        },
+      ),
     ],
   );
 });

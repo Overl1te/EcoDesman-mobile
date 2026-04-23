@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
 
 import "../../../../core/network/error_message.dart";
+import "../../../../core/routing/app_routes.dart";
 import "../../../../core/utils/date_formatter.dart";
 import "../../../../shared/widgets/app_empty_state.dart";
 import "../../../../shared/widgets/app_error_state.dart";
@@ -402,8 +403,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     onKindChanged: (value) => setState(() => _postKind = value),
                     onStatusChanged: (value) =>
                         setState(() => _postStatus = value),
-                    onView: (post) => context.push("/posts/${post.id}"),
-                    onEdit: (post) => context.push("/posts/${post.id}/edit"),
+                    onView: (post) => context.push(
+                      AppRoutes.postDetail(
+                        postId: post.id,
+                        authorUsername: post.author.username,
+                        postSlug: post.slug,
+                      ),
+                    ),
+                    onEdit: (post) =>
+                        context.push(AppRoutes.postEditor(post.id)),
                     onTogglePublished: _togglePostPublished,
                     onDelete: _deletePost,
                   ),

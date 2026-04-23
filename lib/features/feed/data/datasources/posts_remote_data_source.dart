@@ -71,6 +71,17 @@ class PostsRemoteDataSource {
     );
   }
 
+  Future<PostDetails> fetchPostDetailsBySlug({
+    required String authorUsername,
+    required String postSlug,
+  }) async {
+    final response = await _dio.get("/posts/by-slug/$authorUsername/$postSlug");
+
+    return PostDetails.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
   Future<LikeState> likePost(int postId) async {
     final response = await _dio.post("/posts/$postId/like");
     return LikeState.fromJson(Map<String, dynamic>.from(response.data as Map));

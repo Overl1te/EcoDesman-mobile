@@ -29,6 +29,17 @@ class PostsRepositoryImpl implements PostsRepository {
   }
 
   @override
+  Future<PostDetails> fetchPostDetailsBySlug({
+    required String authorUsername,
+    required String postSlug,
+  }) {
+    return _remoteDataSource.fetchPostDetailsBySlug(
+      authorUsername: authorUsername,
+      postSlug: postSlug,
+    );
+  }
+
+  @override
   Future<PaginatedPosts> fetchPosts({
     PostsQuery query = const PostsQuery(),
     int page = 1,
