@@ -54,22 +54,28 @@ cd ../EcoDesman-server
 docker compose up --build -d
 ```
 
-Android emulator:
+Production API:
+
+```bash
+flutter run --dart-define=APP_ENV=production --dart-define=API_BASE_URL=https://api.xn--b1apekb3anb5cpb.xn--p1ai/api/v1
+```
+
+Через основной домен тоже работает:
+
+```bash
+flutter run --dart-define=APP_ENV=production --dart-define=API_BASE_URL=https://xn--b1apekb3anb5cpb.xn--p1ai/api/v1
+```
+
+Локальный Android emulator, если backend поднят на этой же машине:
 
 ```bash
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
 ```
 
-iOS simulator или desktop:
+iOS simulator или desktop с локальным backend:
 
 ```bash
 flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
-```
-
-Production API:
-
-```bash
-flutter run --dart-define=APP_ENV=production --dart-define=API_BASE_URL=https://api.xn--b1apekb3anb5cpb.xn--p1ai/api/v1
 ```
 
 Physical Android over USB:
