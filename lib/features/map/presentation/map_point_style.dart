@@ -19,6 +19,7 @@ class MapPointAppearance {
 }
 
 const Color _defaultCategoryColor = Color(0xFF56616F);
+final RegExp _hexColorPattern = RegExp(r"^#?[0-9A-Fa-f]{6}$");
 
 MapPointAppearance _buildAppearance(Color color) {
   return MapPointAppearance(
@@ -73,14 +74,46 @@ MapPointAppearance getMapPointAppearance(EcoMapCategory? category) {
   return _buildAppearance(_parseHexColor(category?.color));
 }
 
+MapPointAppearance getMapPointAppearanceForPoint({
+  required String? markerColor,
+  required EcoMapCategory? category,
+}) {
+  return _buildAppearance(
+    resolvePointMarkerColor(markerColor: markerColor, category: category),
+  );
+}
+
+Color resolvePointMarkerColor({
+  required String? markerColor,
+  required EcoMapCategory? category,
+}) {
+  final pointColor = _parseHexColorOrNull(markerColor);
+  if (pointColor != null) {
+    return pointColor;
+  }
+
+  final categoryColor = _parseHexColorOrNull(category?.color);
+  if (categoryColor != null) {
+    return categoryColor;
+  }
+
+  return _defaultCategoryColor;
+}
+
 Color _parseHexColor(String? value) {
+  return _parseHexColorOrNull(value) ?? _defaultCategoryColor;
+}
+
+Color? _parseHexColorOrNull(String? value) {
+  final raw = (value ?? "").trim();
+  if (!_hexColorPattern.hasMatch(raw)) {
+    return null;
+  }
+
   final normalized = (value ?? "").replaceAll("#", "");
-  final hex = normalized.length == 3
-      ? normalized.split("").map((part) => "$part$part").join()
-      : normalized;
-  final parsed = int.tryParse(hex, radix: 16);
+  final parsed = int.tryParse(normalized, radix: 16);
   if (parsed == null) {
-    return _defaultCategoryColor;
+    return null;
   }
   return Color(0xFF000000 | parsed);
 }

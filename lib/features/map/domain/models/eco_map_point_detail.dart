@@ -13,6 +13,7 @@ class EcoMapPointDetail {
     required this.workingHours,
     required this.latitude,
     required this.longitude,
+    required this.markerColor,
     required this.categories,
     required this.primaryCategory,
     required this.images,
@@ -28,6 +29,7 @@ class EcoMapPointDetail {
   final String workingHours;
   final double latitude;
   final double longitude;
+  final String markerColor;
   final List<EcoMapCategory> categories;
   final EcoMapCategory? primaryCategory;
   final List<EcoMapPointImage> images;
@@ -49,6 +51,7 @@ class EcoMapPointDetail {
       workingHours: json["working_hours"] as String? ?? "",
       latitude: (json["latitude"] as num?)?.toDouble() ?? 0,
       longitude: (json["longitude"] as num?)?.toDouble() ?? 0,
+      markerColor: json["marker_color"] as String? ?? "",
       categories: rawCategories
           .map(
             (item) =>
@@ -56,7 +59,9 @@ class EcoMapPointDetail {
           )
           .toList(),
       primaryCategory: rawPrimaryCategory is Map
-          ? EcoMapCategory.fromJson(Map<String, dynamic>.from(rawPrimaryCategory))
+          ? EcoMapCategory.fromJson(
+              Map<String, dynamic>.from(rawPrimaryCategory),
+            )
           : null,
       images: rawImages
           .map(

@@ -1,7 +1,10 @@
+import "dart:async";
+
 import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:maplibre/maplibre.dart";
+import "package:shared_preferences/shared_preferences.dart";
 import "package:url_launcher/url_launcher.dart";
 
 import "../../../../core/network/error_message.dart";
@@ -40,15 +43,45 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
   static const double _threeDimensionalPitch = 52;
   static const double _threeDimensionalBearing = -16;
   static const double _tapRadius = 34;
+  static const Color _userMarkerColor = Color(0xFF2563EB);
+  static const Color _userMarkerStrokeColor = Color(0xFFDCEBFF);
+  static const Color _userMarkerHaloColor = Color(0x332563EB);
+  static const Color _userMarkerSelectedColor = Color(0xFF1D4ED8);
+  static const Color _draftMarkerColor = Color(0xFF0EA5E9);
+  static const String _showUserMarkersPreferenceKey = "map_show_user_markers";
 
   MapController? _mapController;
   int? _selectedPointId;
   int? _selectedUserMarkerId;
+  Geographic? _draftUserMarkerPoint;
   String _selectedCategorySlug = "all";
-  bool _isThreeDimensional = true;
+  bool _isThreeDimensional = false;
   bool _filtersExpanded = true;
   bool _showUserMarkers = true;
   bool _isAddingUserMarker = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreUserMarkersVisibility();
+  }
+
+  Future<void> _restoreUserMarkersVisibility() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedValue = preferences.getBool(_showUserMarkersPreferenceKey);
+    if (!mounted || savedValue == null) {
+      return;
+    }
+
+    setState(() {
+      _showUserMarkers = savedValue;
+    });
+  }
+
+  Future<void> _saveUserMarkersVisibility(bool value) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_showUserMarkersPreferenceKey, value);
+  }
 
   LngLatBounds _toLngLatBounds(MapBounds bounds) {
     return LngLatBounds(
@@ -68,6 +101,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     setState(() {
       _selectedPointId = point.id;
       _selectedUserMarkerId = null;
+      _draftUserMarkerPoint = null;
     });
 
     await controller.animateCamera(
@@ -105,6 +139,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     setState(() {
       _selectedUserMarkerId = marker.id;
       _selectedPointId = null;
+      _draftUserMarkerPoint = null;
     });
 
     await controller.animateCamera(
@@ -142,6 +177,25 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
       return;
     }
 
+    setState(() {
+      _draftUserMarkerPoint = point;
+      _selectedPointId = null;
+      _selectedUserMarkerId = null;
+    });
+
+    await _mapController?.animateCamera(
+      center: point,
+      zoom: 14.2,
+      pitch: _twoDimensionalPitch,
+      bearing: 0,
+      nativeDuration: const Duration(milliseconds: 520),
+      webMaxDuration: const Duration(milliseconds: 520),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
     final input = await showModalBottomSheet<UserMapMarkerInput>(
       context: context,
       isScrollControlled: true,
@@ -152,6 +206,11 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     );
 
     if (!mounted || input == null) {
+      if (mounted) {
+        setState(() {
+          _draftUserMarkerPoint = null;
+        });
+      }
       return;
     }
 
@@ -166,12 +225,17 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
       setState(() {
         _isAddingUserMarker = false;
         _showUserMarkers = true;
+        _draftUserMarkerPoint = null;
       });
+      unawaited(_saveUserMarkersVisibility(true));
       await _focusUserMarker(marker);
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _draftUserMarkerPoint = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -273,8 +337,9 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
   }
 
   MapPointAppearance _appearanceForPoint(EcoMapPoint point) {
-    return getMapPointAppearance(
-      getPrimaryMapCategory(
+    return getMapPointAppearanceForPoint(
+      markerColor: point.markerColor,
+      category: getPrimaryMapCategory(
         point.categories,
         primaryCategory: point.primaryCategory,
       ),
@@ -294,6 +359,14 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
       id: "user-${marker.id}",
       geometry: Point(Geographic(lon: marker.longitude, lat: marker.latitude)),
       properties: {"title": marker.title},
+    );
+  }
+
+  Feature<Point> _toDraftUserMarkerFeature(Geographic point) {
+    return Feature(
+      id: "user-marker-draft",
+      geometry: Point(point),
+      properties: const {"title": "Новая метка"},
     );
   }
 
@@ -366,10 +439,13 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     }
 
     if (tappedPoint == null && tappedUserMarker == null) {
-      if (_selectedPointId != null || _selectedUserMarkerId != null) {
+      if (_selectedPointId != null ||
+          _selectedUserMarkerId != null ||
+          _draftUserMarkerPoint != null) {
         setState(() {
           _selectedPointId = null;
           _selectedUserMarkerId = null;
+          _draftUserMarkerPoint = null;
         });
       }
       return;
@@ -475,6 +551,11 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
         final selectedUserMarkerFeatures = selectedUserMarker == null
             ? const <Feature<Point>>[]
             : <Feature<Point>>[_toUserMarkerFeature(selectedUserMarker)];
+        final draftUserMarkerFeatures = _draftUserMarkerPoint == null
+            ? const <Feature<Point>>[]
+            : <Feature<Point>>[
+                _toDraftUserMarkerFeature(_draftUserMarkerPoint!),
+              ];
 
         return Stack(
           children: [
@@ -514,24 +595,41 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                   CircleLayer(
                     points: userMarkerFeatures,
                     radius: 8,
-                    color: const Color(0xFFC75D3A),
+                    color: _userMarkerColor,
                     strokeWidth: 3,
-                    strokeColor: const Color(0xFFF4DDD6),
+                    strokeColor: _userMarkerStrokeColor,
                   ),
                 if (selectedUserMarkerFeatures.isNotEmpty)
                   CircleLayer(
                     points: selectedUserMarkerFeatures,
                     radius: 17,
-                    color: const Color(0x59C75D3A),
+                    color: _userMarkerHaloColor,
                     blur: 0.2,
                     strokeWidth: 2,
-                    strokeColor: const Color(0xFFF4DDD6),
+                    strokeColor: _userMarkerStrokeColor,
                   ),
                 if (selectedUserMarkerFeatures.isNotEmpty)
                   CircleLayer(
                     points: selectedUserMarkerFeatures,
                     radius: 10,
-                    color: const Color(0xFFE56E45),
+                    color: _userMarkerSelectedColor,
+                    strokeWidth: 4,
+                    strokeColor: const Color(0xFFFFFFFF),
+                  ),
+                if (draftUserMarkerFeatures.isNotEmpty)
+                  CircleLayer(
+                    points: draftUserMarkerFeatures,
+                    radius: 22,
+                    color: const Color(0x220EA5E9),
+                    blur: 0.2,
+                    strokeWidth: 2,
+                    strokeColor: _userMarkerStrokeColor,
+                  ),
+                if (draftUserMarkerFeatures.isNotEmpty)
+                  CircleLayer(
+                    points: draftUserMarkerFeatures,
+                    radius: 11,
+                    color: _draftMarkerColor,
                     strokeWidth: 4,
                     strokeColor: const Color(0xFFFFFFFF),
                   ),
@@ -584,6 +682,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                               _selectedCategorySlug = slug;
                               _selectedPointId = null;
                               _selectedUserMarkerId = null;
+                              _draftUserMarkerPoint = null;
                             });
                           },
                           onToggleExpanded: () {
@@ -593,10 +692,12 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                           },
                           onTogglePerspective: _togglePerspective,
                           onToggleUserMarkers: () {
+                            final nextValue = !_showUserMarkers;
                             setState(() {
-                              _showUserMarkers = !_showUserMarkers;
+                              _showUserMarkers = nextValue;
                               _selectedUserMarkerId = null;
                             });
+                            unawaited(_saveUserMarkersVisibility(nextValue));
                           },
                           onToggleAddUserMarker: () {
                             final authState = ref.read(authControllerProvider);
@@ -615,6 +716,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                               _isAddingUserMarker = !_isAddingUserMarker;
                               _selectedPointId = null;
                               _selectedUserMarkerId = null;
+                              _draftUserMarkerPoint = null;
                             });
                           },
                           onReset: _selectedCategorySlug == "all"
@@ -624,6 +726,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                                     _selectedCategorySlug = "all";
                                     _selectedPointId = null;
                                     _selectedUserMarkerId = null;
+                                    _draftUserMarkerPoint = null;
                                   });
                                 },
                         ),
@@ -635,6 +738,7 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                                 _selectedCategorySlug = "all";
                                 _selectedPointId = null;
                                 _selectedUserMarkerId = null;
+                                _draftUserMarkerPoint = null;
                               });
                             },
                           ),
@@ -689,7 +793,9 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
                         ),
                         child: Text(
                           _isAddingUserMarker
-                              ? "Нажмите на карту, чтобы поставить метку"
+                              ? _draftUserMarkerPoint == null
+                                    ? "Нажмите на карту, чтобы поставить метку"
+                                    : "Место выбрано, заполните карточку"
                               : "Нажмите на точку, чтобы открыть подробности",
                           style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
@@ -887,7 +993,7 @@ class _MapFilterPanel extends StatelessWidget {
                       label: "Метки людей",
                       count: userMarkersCount,
                       icon: Icons.person_pin_circle_outlined,
-                      accentColor: const Color(0xFFC75D3A),
+                      accentColor: _MapPlaceholderScreenState._userMarkerColor,
                       selected: showUserMarkers,
                       onTap: onToggleUserMarkers,
                     ),
@@ -1294,17 +1400,14 @@ class _CreateUserMarkerSheetState
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            CheckboxListTile(
+            const SizedBox(height: 14),
+            _VisibilitySwitchTile(
               value: _isPublic,
               onChanged: (value) {
                 setState(() {
-                  _isPublic = value ?? true;
+                  _isPublic = value;
                 });
               },
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text("Показывать другим пользователям"),
             ),
             const SizedBox(height: 8),
             Row(
@@ -1367,6 +1470,89 @@ class _CreateUserMarkerSheetState
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VisibilitySwitchTile extends StatelessWidget {
+  const _VisibilitySwitchTile({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = _MapPlaceholderScreenState._userMarkerColor;
+
+    return Material(
+      color: value
+          ? accent.withValues(alpha: 0.10)
+          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: value
+                  ? accent.withValues(alpha: 0.32)
+                  : theme.colorScheme.outlineVariant,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: value
+                      ? accent.withValues(alpha: 0.14)
+                      : theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  value ? Icons.visibility_outlined : Icons.lock_outline,
+                  color: value ? accent : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value ? "Видно всем на карте" : "Только для меня",
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value
+                          ? "Другие пользователи смогут открыть метку и оставить комментарий."
+                          : "Метка сохранится, но не появится у других пользователей.",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Switch.adaptive(
+                value: value,
+                activeThumbColor: accent,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
         ),
       ),
     );
