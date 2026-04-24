@@ -3,6 +3,8 @@ import "../models/support_models.dart";
 abstract class SupportRepository {
   Future<HelpCenterContent> fetchHelpCenterContent();
 
+  Future<HelpDocument> fetchHelpDocument(String slug);
+
   Future<SupportKnowledgeResponse> fetchKnowledge();
 
   Future<SupportBotReply> askBot(String query);

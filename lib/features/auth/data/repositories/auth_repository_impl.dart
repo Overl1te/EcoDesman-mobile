@@ -5,6 +5,7 @@ import "../../../../core/storage/token_storage.dart";
 import "../../domain/models/app_user.dart";
 import "../../domain/models/auth_session.dart";
 import "../../domain/models/auth_tokens.dart";
+import "../../domain/models/social_auth_provider.dart";
 import "../../domain/repositories/auth_repository.dart";
 import "../datasources/auth_remote_data_source.dart";
 
@@ -63,6 +64,41 @@ class AuthRepositoryImpl implements AuthRepository {
           acceptPublicPersonalDataDistribution,
       displayName: displayName,
       phone: phone,
+    );
+    await _persistTokens(session.tokens);
+    return session;
+  }
+
+  @override
+  Future<List<SocialAuthProvider>> fetchSocialProviders({
+    required String redirectUri,
+    required String state,
+  }) {
+    return _remoteDataSource.fetchSocialProviders(
+      redirectUri: redirectUri,
+      state: state,
+    );
+  }
+
+  @override
+  Future<AuthSession> loginWithSocial({
+    required String provider,
+    required String code,
+    required String redirectUri,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    required bool acceptPublicPersonalDataDistribution,
+  }) async {
+    final session = await _remoteDataSource.loginWithSocial(
+      provider: provider,
+      code: code,
+      redirectUri: redirectUri,
+      acceptTerms: acceptTerms,
+      acceptPrivacyPolicy: acceptPrivacyPolicy,
+      acceptPersonalData: acceptPersonalData,
+      acceptPublicPersonalDataDistribution:
+          acceptPublicPersonalDataDistribution,
     );
     await _persistTokens(session.tokens);
     return session;

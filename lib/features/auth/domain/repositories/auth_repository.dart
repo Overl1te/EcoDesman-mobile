@@ -1,5 +1,6 @@
 import "../models/app_user.dart";
 import "../models/auth_session.dart";
+import "../models/social_auth_provider.dart";
 
 abstract class AuthRepository {
   Future<AuthSession?> restoreSession();
@@ -20,6 +21,21 @@ abstract class AuthRepository {
     bool acceptPublicPersonalDataDistribution = false,
     String displayName = "",
     String phone = "",
+  });
+
+  Future<List<SocialAuthProvider>> fetchSocialProviders({
+    required String redirectUri,
+    required String state,
+  });
+
+  Future<AuthSession> loginWithSocial({
+    required String provider,
+    required String code,
+    required String redirectUri,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    required bool acceptPublicPersonalDataDistribution,
   });
 
   Future<String> requestPasswordReset({required String identifier});

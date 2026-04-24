@@ -5,6 +5,7 @@ import "../../../../core/network/api_client.dart";
 import "../../domain/models/app_user.dart";
 import "../../domain/models/auth_session.dart";
 import "../../domain/models/auth_tokens.dart";
+import "../../domain/models/social_auth_provider.dart";
 
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
   return AuthRemoteDataSource(ref.watch(apiClientProvider));
@@ -59,6 +60,50 @@ class AuthRemoteDataSource {
         "phone": phone,
         "password": password,
         "password_confirmation": passwordConfirmation,
+        "accept_terms": acceptTerms,
+        "accept_privacy_policy": acceptPrivacyPolicy,
+        "accept_personal_data": acceptPersonalData,
+        "accept_public_personal_data_distribution":
+            acceptPublicPersonalDataDistribution,
+      },
+      options: Options(extra: const {"skipAuth": true}),
+    );
+    return _parseSession(response);
+  }
+
+  Future<List<SocialAuthProvider>> fetchSocialProviders({
+    required String redirectUri,
+    required String state,
+  }) async {
+    final response = await _dio.get(
+      "/auth/social/providers",
+      queryParameters: {"redirect_uri": redirectUri, "state": state},
+      options: Options(extra: const {"skipAuth": true}),
+    );
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return (data["providers"] as List<dynamic>? ?? const [])
+        .map(
+          (item) => SocialAuthProvider.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<AuthSession> loginWithSocial({
+    required String provider,
+    required String code,
+    required String redirectUri,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    required bool acceptPublicPersonalDataDistribution,
+  }) async {
+    final response = await _dio.post(
+      "/auth/social/$provider",
+      data: {
+        "code": code,
+        "redirect_uri": redirectUri,
         "accept_terms": acceptTerms,
         "accept_privacy_policy": acceptPrivacyPolicy,
         "accept_personal_data": acceptPersonalData,

@@ -22,6 +22,11 @@ class SupportRepositoryImpl implements SupportRepository {
   }
 
   @override
+  Future<HelpDocument> fetchHelpDocument(String slug) {
+    return _remoteDataSource.fetchHelpDocument(slug);
+  }
+
+  @override
   Future<SupportKnowledgeResponse> fetchKnowledge() {
     return _remoteDataSource.fetchKnowledge();
   }

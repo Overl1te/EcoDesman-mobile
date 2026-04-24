@@ -29,80 +29,36 @@ class SupportKnowledgeEntry {
   }
 }
 
-class HelpCenterOverviewCard {
-  const HelpCenterOverviewCard({
-    required this.title,
-    required this.titleEn,
-    required this.body,
-    required this.bodyEn,
-  });
-
-  final String title;
-  final String titleEn;
-  final String body;
-  final String bodyEn;
-
-  factory HelpCenterOverviewCard.fromJson(Map<String, dynamic> json) {
-    return HelpCenterOverviewCard(
-      title: json["title"] as String? ?? "",
-      titleEn: json["title_en"] as String? ?? "",
-      body: json["body"] as String? ?? "",
-      bodyEn: json["body_en"] as String? ?? "",
-    );
-  }
-}
-
 class HelpCenterOverview {
   const HelpCenterOverview({
     required this.title,
-    required this.titleEn,
     required this.description,
-    required this.descriptionEn,
-    required this.cards,
+    required this.lead,
   });
 
   final String title;
-  final String titleEn;
   final String description;
-  final String descriptionEn;
-  final List<HelpCenterOverviewCard> cards;
+  final String lead;
 
   factory HelpCenterOverview.fromJson(Map<String, dynamic> json) {
     return HelpCenterOverview(
       title: json["title"] as String? ?? "",
-      titleEn: json["title_en"] as String? ?? "",
       description: json["description"] as String? ?? "",
-      descriptionEn: json["description_en"] as String? ?? "",
-      cards: (json["cards"] as List<dynamic>? ?? const [])
-          .map(
-            (item) => HelpCenterOverviewCard.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
+      lead: json["lead"] as String? ?? "",
     );
   }
 }
 
 class HelpCenterServiceBlock {
-  const HelpCenterServiceBlock({
-    required this.title,
-    required this.titleEn,
-    required this.body,
-    required this.bodyEn,
-  });
+  const HelpCenterServiceBlock({required this.title, required this.body});
 
   final String title;
-  final String titleEn;
   final String body;
-  final String bodyEn;
 
   factory HelpCenterServiceBlock.fromJson(Map<String, dynamic> json) {
     return HelpCenterServiceBlock(
       title: json["title"] as String? ?? "",
-      titleEn: json["title_en"] as String? ?? "",
       body: json["body"] as String? ?? "",
-      bodyEn: json["body_en"] as String? ?? "",
     );
   }
 }
@@ -110,93 +66,151 @@ class HelpCenterServiceBlock {
 class HelpDocumentApproval {
   const HelpDocumentApproval({
     required this.status,
-    required this.statusEn,
     required this.revision,
-    required this.revisionEn,
     required this.effectiveDate,
-    required this.effectiveDateEn,
     required this.approvedBy,
-    required this.approvedByEn,
     required this.approvedRole,
-    required this.approvedRoleEn,
     required this.approvalBasis,
-    required this.approvalBasisEn,
     required this.contact,
-    required this.contactEn,
     required this.note,
-    required this.noteEn,
   });
 
   final String status;
-  final String statusEn;
   final String revision;
-  final String revisionEn;
   final String effectiveDate;
-  final String effectiveDateEn;
   final String approvedBy;
-  final String approvedByEn;
   final String approvedRole;
-  final String approvedRoleEn;
   final String approvalBasis;
-  final String approvalBasisEn;
   final String contact;
-  final String contactEn;
   final String note;
-  final String noteEn;
 
   factory HelpDocumentApproval.fromJson(Map<String, dynamic> json) {
     return HelpDocumentApproval(
       status: json["status"] as String? ?? "",
-      statusEn: json["status_en"] as String? ?? "",
       revision: json["revision"] as String? ?? "",
-      revisionEn: json["revision_en"] as String? ?? "",
       effectiveDate: json["effective_date"] as String? ?? "",
-      effectiveDateEn: json["effective_date_en"] as String? ?? "",
       approvedBy: json["approved_by"] as String? ?? "",
-      approvedByEn: json["approved_by_en"] as String? ?? "",
       approvedRole: json["approved_role"] as String? ?? "",
-      approvedRoleEn: json["approved_role_en"] as String? ?? "",
       approvalBasis: json["approval_basis"] as String? ?? "",
-      approvalBasisEn: json["approval_basis_en"] as String? ?? "",
       contact: json["contact"] as String? ?? "",
-      contactEn: json["contact_en"] as String? ?? "",
       note: json["note"] as String? ?? "",
-      noteEn: json["note_en"] as String? ?? "",
     );
   }
 }
 
 class HelpDocumentSection {
   const HelpDocumentSection({
+    required this.id,
     required this.title,
-    required this.titleEn,
     required this.paragraphs,
-    required this.paragraphsEn,
     required this.bullets,
-    required this.bulletsEn,
   });
 
+  final String id;
   final String title;
-  final String titleEn;
   final List<String> paragraphs;
-  final List<String> paragraphsEn;
   final List<String> bullets;
-  final List<String> bulletsEn;
 
   factory HelpDocumentSection.fromJson(Map<String, dynamic> json) {
     return HelpDocumentSection(
+      id: json["id"] as String? ?? "",
       title: json["title"] as String? ?? "",
-      titleEn: json["title_en"] as String? ?? "",
       paragraphs: (json["paragraphs"] as List<dynamic>? ?? const [])
-          .map((item) => item as String)
-          .toList(),
-      paragraphsEn: (json["paragraphs_en"] as List<dynamic>? ?? const [])
           .map((item) => item as String)
           .toList(),
       bullets: (json["bullets"] as List<dynamic>? ?? const [])
           .map((item) => item as String)
           .toList(),
-      bulletsEn: (json["bullets_en"] as List<dynamic>? ?? const [])
+    );
+  }
+}
+
+class HelpDocumentGroup {
+  const HelpDocumentGroup({
+    required this.id,
+    required this.title,
+    required this.documentIds,
+  });
+
+  final String id;
+  final String title;
+  final List<String> documentIds;
+
+  factory HelpDocumentGroup.fromJson(Map<String, dynamic> json) {
+    return HelpDocumentGroup(
+      id: json["id"] as String? ?? "",
+      title: json["title"] as String? ?? "",
+      documentIds: (json["document_ids"] as List<dynamic>? ?? const [])
+          .map((item) => item as String)
+          .toList(),
+    );
+  }
+}
+
+class HelpDocumentQuickFact {
+  const HelpDocumentQuickFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory HelpDocumentQuickFact.fromJson(Map<String, dynamic> json) {
+    return HelpDocumentQuickFact(
+      label: json["label"] as String? ?? "",
+      value: json["value"] as String? ?? "",
+    );
+  }
+}
+
+class HelpDocumentTocItem {
+  const HelpDocumentTocItem({required this.id, required this.title});
+
+  final String id;
+  final String title;
+
+  factory HelpDocumentTocItem.fromJson(Map<String, dynamic> json) {
+    return HelpDocumentTocItem(
+      id: json["id"] as String? ?? "",
+      title: json["title"] as String? ?? "",
+    );
+  }
+}
+
+class HelpOperatorDetails {
+  const HelpOperatorDetails({
+    required this.name,
+    required this.inn,
+    required this.ogrn,
+    required this.address,
+    required this.email,
+  });
+
+  final String name;
+  final String inn;
+  final String ogrn;
+  final String address;
+  final String email;
+
+  factory HelpOperatorDetails.fromJson(Map<String, dynamic> json) {
+    return HelpOperatorDetails(
+      name: json["name"] as String? ?? "",
+      inn: json["inn"] as String? ?? "",
+      ogrn: json["ogrn"] as String? ?? "",
+      address: json["address"] as String? ?? "",
+      email: json["email"] as String? ?? "",
+    );
+  }
+}
+
+class HelpDocumentWithdrawal {
+  const HelpDocumentWithdrawal({required this.title, required this.items});
+
+  final String title;
+  final List<String> items;
+
+  factory HelpDocumentWithdrawal.fromJson(Map<String, dynamic> json) {
+    return HelpDocumentWithdrawal(
+      title: json["title"] as String? ?? "",
+      items: (json["items"] as List<dynamic>? ?? const [])
           .map((item) => item as String)
           .toList(),
     );
@@ -206,38 +220,83 @@ class HelpDocumentSection {
 class HelpDocument {
   const HelpDocument({
     required this.id,
+    required this.slug,
+    required this.group,
     required this.label,
-    required this.labelEn,
+    required this.title,
     required this.summary,
-    required this.summaryEn,
+    required this.description,
+    required this.updatedAt,
+    required this.status,
+    required this.revision,
+    required this.operator,
     required this.pdfFileName,
     required this.pdfDownloadUrl,
     required this.approval,
+    required this.quickFacts,
+    required this.tableOfContents,
     required this.sections,
+    required this.operatorDetails,
+    required this.withdrawal,
+    required this.archiveUrl,
   });
 
   final String id;
+  final String slug;
+  final String group;
   final String label;
-  final String labelEn;
+  final String title;
   final String summary;
-  final String summaryEn;
+  final String description;
+  final String updatedAt;
+  final String status;
+  final String revision;
+  final String operator;
   final String pdfFileName;
   final String pdfDownloadUrl;
   final HelpDocumentApproval approval;
+  final List<HelpDocumentQuickFact> quickFacts;
+  final List<HelpDocumentTocItem> tableOfContents;
   final List<HelpDocumentSection> sections;
+  final HelpOperatorDetails? operatorDetails;
+  final HelpDocumentWithdrawal? withdrawal;
+  final String archiveUrl;
 
   factory HelpDocument.fromJson(Map<String, dynamic> json) {
+    final rawOperatorDetails = json["operator_details"];
+    final rawWithdrawal = json["withdrawal"];
+
     return HelpDocument(
       id: json["id"] as String? ?? "",
+      slug: json["slug"] as String? ?? "",
+      group: json["group"] as String? ?? "",
       label: json["label"] as String? ?? "",
-      labelEn: json["label_en"] as String? ?? "",
+      title: json["title"] as String? ?? "",
       summary: json["summary"] as String? ?? "",
-      summaryEn: json["summary_en"] as String? ?? "",
+      description: json["description"] as String? ?? "",
+      updatedAt: json["updated_at"] as String? ?? "",
+      status: json["status"] as String? ?? "",
+      revision: json["revision"] as String? ?? "",
+      operator: json["operator"] as String? ?? "",
       pdfFileName: json["pdf_file_name"] as String? ?? "",
       pdfDownloadUrl: json["pdf_download_url"] as String? ?? "",
       approval: HelpDocumentApproval.fromJson(
         Map<String, dynamic>.from(json["approval"] as Map? ?? const {}),
       ),
+      quickFacts: (json["quick_facts"] as List<dynamic>? ?? const [])
+          .map(
+            (item) => HelpDocumentQuickFact.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      tableOfContents: (json["table_of_contents"] as List<dynamic>? ?? const [])
+          .map(
+            (item) => HelpDocumentTocItem.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
       sections: (json["sections"] as List<dynamic>? ?? const [])
           .map(
             (item) => HelpDocumentSection.fromJson(
@@ -245,6 +304,31 @@ class HelpDocument {
             ),
           )
           .toList(),
+      operatorDetails: rawOperatorDetails is Map
+          ? HelpOperatorDetails.fromJson(
+              Map<String, dynamic>.from(rawOperatorDetails),
+            )
+          : null,
+      withdrawal: rawWithdrawal is Map
+          ? HelpDocumentWithdrawal.fromJson(
+              Map<String, dynamic>.from(rawWithdrawal),
+            )
+          : null,
+      archiveUrl: json["archive_url"] as String? ?? "",
+    );
+  }
+}
+
+class HelpContactBlock {
+  const HelpContactBlock({required this.title, required this.email});
+
+  final String title;
+  final String email;
+
+  factory HelpContactBlock.fromJson(Map<String, dynamic> json) {
+    return HelpContactBlock(
+      title: json["title"] as String? ?? "",
+      email: json["email"] as String? ?? "",
     );
   }
 }
@@ -252,19 +336,30 @@ class HelpDocument {
 class HelpCenterContent {
   const HelpCenterContent({
     required this.overview,
+    required this.documentGroups,
     required this.serviceBlocks,
     required this.documents,
+    required this.contactBlock,
   });
 
   final HelpCenterOverview overview;
+  final List<HelpDocumentGroup> documentGroups;
   final List<HelpCenterServiceBlock> serviceBlocks;
   final List<HelpDocument> documents;
+  final HelpContactBlock contactBlock;
 
   factory HelpCenterContent.fromJson(Map<String, dynamic> json) {
     return HelpCenterContent(
       overview: HelpCenterOverview.fromJson(
         Map<String, dynamic>.from(json["overview"] as Map? ?? const {}),
       ),
+      documentGroups: (json["document_groups"] as List<dynamic>? ?? const [])
+          .map(
+            (item) => HelpDocumentGroup.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
       serviceBlocks: (json["service_blocks"] as List<dynamic>? ?? const [])
           .map(
             (item) => HelpCenterServiceBlock.fromJson(
@@ -278,6 +373,9 @@ class HelpCenterContent {
                 HelpDocument.fromJson(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      contactBlock: HelpContactBlock.fromJson(
+        Map<String, dynamic>.from(json["contact_block"] as Map? ?? const {}),
+      ),
     );
   }
 }

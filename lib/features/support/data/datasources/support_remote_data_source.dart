@@ -22,6 +22,13 @@ class SupportRemoteDataSource {
     );
   }
 
+  Future<HelpDocument> fetchHelpDocument(String slug) async {
+    final response = await _dio.get("/support/help-center/$slug");
+    return HelpDocument.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
   Future<SupportKnowledgeResponse> fetchKnowledge() async {
     final response = await _dio.get("/support/knowledge");
     return SupportKnowledgeResponse.fromJson(

@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../../../../core/network/error_message.dart";
 import "../../data/repositories/auth_repository_impl.dart";
 import "../../domain/models/app_user.dart";
+import "../../domain/models/social_auth_provider.dart";
 
 enum AuthStatus { unknown, authenticated, guest, unauthenticated }
 
@@ -153,6 +154,50 @@ class AuthController extends Notifier<AuthState> {
     return ref
         .read(authRepositoryProvider)
         .requestPasswordReset(identifier: identifier);
+  }
+
+  Future<List<SocialAuthProvider>> fetchSocialProviders({
+    required String redirectUri,
+    required String state,
+  }) {
+    return ref
+        .read(authRepositoryProvider)
+        .fetchSocialProviders(redirectUri: redirectUri, state: state);
+  }
+
+  Future<void> loginWithSocial({
+    required String provider,
+    required String code,
+    required String redirectUri,
+    required bool acceptTerms,
+    required bool acceptPrivacyPolicy,
+    required bool acceptPersonalData,
+    required bool acceptPublicPersonalDataDistribution,
+  }) async {
+    state = state.copyWith(isBusy: true, clearError: true);
+
+    try {
+      final session = await ref
+          .read(authRepositoryProvider)
+          .loginWithSocial(
+            provider: provider,
+            code: code,
+            redirectUri: redirectUri,
+            acceptTerms: acceptTerms,
+            acceptPrivacyPolicy: acceptPrivacyPolicy,
+            acceptPersonalData: acceptPersonalData,
+            acceptPublicPersonalDataDistribution:
+                acceptPublicPersonalDataDistribution,
+          );
+      state = AuthState.authenticated(session.user);
+    } catch (error) {
+      state = AuthState.unauthenticated(
+        errorMessage: humanizeNetworkError(
+          error,
+          fallback: "Не удалось выполнить вход через внешний сервис",
+        ),
+      );
+    }
   }
 
   void continueAsGuest() {
