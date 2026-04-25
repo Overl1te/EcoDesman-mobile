@@ -27,11 +27,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _statusController = TextEditingController();
   final _cityController = TextEditingController();
   final _bioController = TextEditingController();
-  final _websiteController = TextEditingController();
   final _telegramController = TextEditingController();
   final _vkController = TextEditingController();
   final _instagramController = TextEditingController();
@@ -46,11 +44,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _nameController.dispose();
-    _phoneController.dispose();
     _statusController.dispose();
     _cityController.dispose();
     _bioController.dispose();
-    _websiteController.dispose();
     _telegramController.dispose();
     _vkController.dispose();
     _instagramController.dispose();
@@ -66,7 +62,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     _usernameController.text = user.username;
     _emailController.text = user.email;
     _nameController.text = user.name;
-    _phoneController.text = user.phone ?? "";
     _avatarUrl = user.avatarUrl;
     _avatarCacheBuster = user.avatarUrl.isEmpty
         ? null
@@ -74,7 +69,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     _statusController.text = user.statusText;
     _cityController.text = user.city;
     _bioController.text = user.bio;
-    _websiteController.text = user.websiteUrl;
     _telegramController.text = user.telegramUrl;
     _vkController.text = user.vkUrl;
     _instagramController.text = user.instagramUrl;
@@ -533,12 +527,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           username: _usernameController.text.trim(),
           email: _emailController.text.trim(),
           displayName: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
           avatarUrl: _avatarUrl.trim(),
           statusText: _statusController.text.trim(),
           bio: _bioController.text.trim(),
           city: _cityController.text.trim(),
-          websiteUrl: _normalizeUrl(_websiteController.text),
           telegramUrl: _normalizeUrl(_telegramController.text),
           vkUrl: _normalizeUrl(_vkController.text),
           instagramUrl: _normalizeUrl(_instagramController.text),
@@ -686,14 +678,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: "Телефон",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
                 controller: _bioController,
                 decoration: const InputDecoration(
                   labelText: "О себе",
@@ -718,21 +702,12 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                "Соцсети и ссылки",
+                "Соцсети",
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _websiteController,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: "Сайт",
-                  hintText: "https://example.com",
-                ),
-              ),
-              const SizedBox(height: 16),
               TextFormField(
                 controller: _telegramController,
                 keyboardType: TextInputType.url,

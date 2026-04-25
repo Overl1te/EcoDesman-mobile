@@ -1,13 +1,9 @@
-import "dart:async";
-
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
-import "package:url_launcher/url_launcher.dart";
 
 import "../../../../core/network/error_message.dart";
-import "../../domain/models/social_auth_provider.dart";
 import "../controllers/auth_controller.dart";
 
 enum _AuthMode { signIn, signUp }
@@ -20,8 +16,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  static const _oauthLinksChannel = EventChannel("eco_nizhny/oauth_links");
-
   final _loginFormKey = GlobalKey<FormState>();
   final _registerFormKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
@@ -99,125 +93,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           displayName: _displayNameController.text.trim(),
           phone: _phoneController.text.trim(),
         );
-  }
-
-  Future<void> _startSocialAuth(String provider) async {
-    if (_mode == _AuthMode.signUp &&
-        (!_acceptTerms || !_acceptPrivacyPolicy || !_acceptPersonalData)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Для регистрации через соцсеть примите соглашение, политику и согласие на обработку данных.",
-          ),
-        ),
-      );
-      return;
-    }
-
-    final redirectUri = "ecodesman://auth/social/$provider/callback";
-    final state = [
-      _acceptTerms,
-      _acceptPrivacyPolicy,
-      _acceptPersonalData,
-      _acceptPublicPersonalDataDistribution,
-    ].map((value) => value ? "1" : "0").join();
-
-    try {
-      final providers = await ref
-          .read(authControllerProvider.notifier)
-          .fetchSocialProviders(redirectUri: redirectUri, state: state);
-      SocialAuthProvider? option;
-      for (final item in providers) {
-        if (item.id == provider) {
-          option = item;
-          break;
-        }
-      }
-
-      if (option == null ||
-          !option.enabled ||
-          option.authorizationUrl.isEmpty) {
-        if (!mounted) {
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Этот способ входа пока не настроен.")),
-        );
-        return;
-      }
-
-      final result = await _launchAndWaitForOAuthCallback(
-        option.authorizationUrl,
-      );
-      final resultUri = Uri.parse(result);
-      final code = resultUri.queryParameters["code"];
-      final providerError = resultUri.queryParameters["error"];
-
-      if (providerError != null || code == null || code.isEmpty) {
-        throw StateError("Провайдер не вернул код авторизации.");
-      }
-
-      await ref
-          .read(authControllerProvider.notifier)
-          .loginWithSocial(
-            provider: provider,
-            code: code,
-            redirectUri: redirectUri,
-            acceptTerms: _acceptTerms,
-            acceptPrivacyPolicy: _acceptPrivacyPolicy,
-            acceptPersonalData: _acceptPersonalData,
-            acceptPublicPersonalDataDistribution:
-                _acceptPublicPersonalDataDistribution,
-          );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            humanizeNetworkError(
-              error,
-              fallback: "Не удалось начать вход через соцсеть",
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<String> _launchAndWaitForOAuthCallback(String authorizationUrl) async {
-    final completer = Completer<String>();
-    late final StreamSubscription<String> subscription;
-
-    subscription = _oauthLinksChannel
-        .receiveBroadcastStream()
-        .cast<String>()
-        .listen((link) {
-          if (!completer.isCompleted && link.startsWith("ecodesman://")) {
-            completer.complete(link);
-          }
-        });
-
-    try {
-      final uri = Uri.parse(authorizationUrl);
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        throw StateError("Не удалось открыть браузер для авторизации.");
-      }
-
-      return await completer.future.timeout(
-        const Duration(minutes: 3),
-        onTimeout: () {
-          throw TimeoutException("Время авторизации истекло.");
-        },
-      );
-    } finally {
-      await subscription.cancel();
-    }
   }
 
   Future<void> _showPasswordResetSheet() async {
@@ -451,11 +326,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 color: theme.colorScheme.onSurfaceVariant,
                                 height: 1.4,
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            _SocialAuthButtons(
-                              isBusy: authState.isBusy,
-                              onProviderSelected: _startSocialAuth,
                             ),
                             const SizedBox(height: 20),
                             AnimatedSwitcher(
@@ -738,151 +608,6 @@ class _AuthFooter extends StatelessWidget {
           TextButton(
             onPressed: onToggleMode,
             child: Text(isSignIn ? "Регистрация" : "Вход"),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SocialAuthButtons extends StatelessWidget {
-  const _SocialAuthButtons({
-    required this.isBusy,
-    required this.onProviderSelected,
-  });
-
-  final bool isBusy;
-  final ValueChanged<String> onProviderSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: Theme.of(context).dividerColor)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                "Войти через",
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ),
-            Expanded(child: Divider(color: Theme.of(context).dividerColor)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _SocialAuthButton(
-                label: "VK",
-                fullLabel: "ВКонтакте",
-                color: const Color(0xFF2787F5),
-                isBusy: isBusy,
-                isAvailable: false,
-                statusLabel: "Недоступно",
-                onPressed: () => onProviderSelected("vk"),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SocialAuthButton(
-                label: "G",
-                fullLabel: "Google",
-                color: const Color(0xFFD83B2D),
-                isBusy: isBusy,
-                isAvailable: false,
-                statusLabel: "Недоступно",
-                onPressed: () => onProviderSelected("google"),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SocialAuthButton(
-                label: "Я",
-                fullLabel: "Яндекс",
-                color: const Color(0xFFF2C94C),
-                foregroundColor: const Color(0xFF20251F),
-                isBusy: isBusy,
-                isAvailable: false,
-                statusLabel: "Недоступно",
-                onPressed: () => onProviderSelected("yandex"),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SocialAuthButton extends StatelessWidget {
-  const _SocialAuthButton({
-    required this.label,
-    required this.fullLabel,
-    required this.color,
-    required this.isBusy,
-    required this.isAvailable,
-    required this.statusLabel,
-    required this.onPressed,
-    this.foregroundColor = Colors.white,
-  });
-
-  final String label;
-  final String fullLabel;
-  final Color color;
-  final Color foregroundColor;
-  final bool isBusy;
-  final bool isAvailable;
-  final String statusLabel;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return OutlinedButton(
-      onPressed: isBusy || !isAvailable ? null : onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: isAvailable
-                ? color
-                : color.withValues(alpha: 0.24),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isAvailable
-                    ? foregroundColor
-                    : theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            child: Text(
-              fullLabel,
-              style: TextStyle(
-                decoration: isAvailable ? null : TextDecoration.lineThrough,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            statusLabel,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),
