@@ -18,6 +18,8 @@ import "../../domain/models/admin_map_point.dart";
 import "../../domain/models/admin_map_point_input.dart";
 import "../../domain/models/admin_overview.dart";
 
+enum _MapMode { list, create }
+
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
 
@@ -50,9 +52,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   String _postKind = "all";
   String _postStatus = "all";
+  String _postOrdering = "recent";
   String _userRole = "all";
   String _userStatus = "all";
   String _pointStatus = "all";
+  _MapMode _mapMode = _MapMode.list;
 
   @override
   void initState() {
@@ -85,16 +89,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       _overview = await ref.read(adminRemoteDataSourceProvider).fetchOverview();
     } catch (error) {
       _showSnack(
-        humanizeNetworkError(
-          error,
-          fallback: "Не удалось загрузить обзор админки",
-        ),
+        humanizeNetworkError(error, fallback: "Не удалось загрузить обзор"),
         isError: true,
       );
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingOverview = false);
-      }
+      if (mounted) setState(() => _isLoadingOverview = false);
     }
   }
 
@@ -103,24 +102,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       _isLoadingPosts = true;
       _postsError = null;
     });
-
     try {
-      _posts = await ref
-          .read(adminRemoteDataSourceProvider)
-          .fetchPosts(
-            search: _postSearchController.text,
-            kind: _postKind,
-            publicationStatus: _postStatus,
-          );
-    } catch (error) {
-      _postsError = humanizeNetworkError(
-        error,
-        fallback: "Не удалось загрузить посты",
+      _posts = await ref.read(adminRemoteDataSourceProvider).fetchPosts(
+        search: _postSearchController.text,
+        kind: _postKind,
+        publicationStatus: _postStatus,
       );
+    } catch (error) {
+      _postsError = humanizeNetworkError(error, fallback: "Не удалось загрузить посты");
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingPosts = false);
-      }
+      if (mounted) setState(() => _isLoadingPosts = false);
     }
   }
 
@@ -129,24 +120,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       _isLoadingUsers = true;
       _usersError = null;
     });
-
     try {
-      _users = await ref
-          .read(adminRemoteDataSourceProvider)
-          .fetchUsers(
-            search: _userSearchController.text,
-            role: _userRole,
-            status: _userStatus,
-          );
-    } catch (error) {
-      _usersError = humanizeNetworkError(
-        error,
-        fallback: "Не удалось загрузить пользователей",
+      _users = await ref.read(adminRemoteDataSourceProvider).fetchUsers(
+        search: _userSearchController.text,
+        role: _userRole,
+        status: _userStatus,
       );
+    } catch (error) {
+      _usersError = humanizeNetworkError(error, fallback: "Не удалось загрузить пользователей");
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingUsers = false);
-      }
+      if (mounted) setState(() => _isLoadingUsers = false);
     }
   }
 
@@ -155,33 +138,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       _isLoadingPoints = true;
       _pointsError = null;
     });
-
     try {
-      final categories = await ref
-          .read(adminRemoteDataSourceProvider)
-          .fetchMapCategories();
-      final points = await ref
-          .read(adminRemoteDataSourceProvider)
-          .fetchMapPoints(
-            search: _pointSearchController.text,
-            isActive: switch (_pointStatus) {
-              "active" => true,
-              "hidden" => false,
-              _ => null,
-            },
-          );
-
+      final categories = await ref.read(adminRemoteDataSourceProvider).fetchMapCategories();
+      final points = await ref.read(adminRemoteDataSourceProvider).fetchMapPoints(
+        search: _pointSearchController.text,
+        isActive: switch (_pointStatus) {
+          "active" => true,
+          "hidden" => false,
+          _ => null,
+        },
+      );
       _categories = categories;
       _points = points;
     } catch (error) {
-      _pointsError = humanizeNetworkError(
-        error,
-        fallback: "Не удалось загрузить точки карты",
-      );
+      _pointsError = humanizeNetworkError(error, fallback: "Не удалось загрузить точки");
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingPoints = false);
-      }
+      if (mounted) setState(() => _isLoadingPoints = false);
     }
   }
 
@@ -191,47 +163,31 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await action();
     } catch (error) {
       _showSnack(
-        humanizeNetworkError(
-          error,
-          fallback: "Не удалось выполнить действие администратора",
-        ),
+        humanizeNetworkError(error, fallback: "Не удалось выполнить действие"),
         isError: true,
       );
     } finally {
-      if (mounted) {
-        setState(() => _busyKey = null);
-      }
+      if (mounted) setState(() => _busyKey = null);
     }
   }
 
   Future<bool> _confirm(String title, String message) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text("Отмена"),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text("Подтвердить"),
-            ),
-          ],
-        );
-      },
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text("Отмена")),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text("Подтвердить")),
+        ],
+      ),
     );
     return result ?? false;
   }
 
   void _showSnack(String message, {bool isError = false}) {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -242,22 +198,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   Future<void> _togglePostPublished(FeedPost post) async {
     await _runAction("post-${post.id}", () async {
-      await ref
-          .read(adminRemoteDataSourceProvider)
-          .togglePostPublished(postId: post.id, isPublished: !post.isPublished);
+      await ref.read(adminRemoteDataSourceProvider).togglePostPublished(
+        postId: post.id,
+        isPublished: !post.isPublished,
+      );
       await Future.wait([_loadPosts(), _loadOverview()]);
     });
   }
 
   Future<void> _deletePost(FeedPost post) async {
-    final confirmed = await _confirm(
-      "Удалить пост",
-      "Пост будет удалён без возможности восстановления.",
-    );
-    if (!confirmed) {
-      return;
-    }
-
+    final confirmed = await _confirm("Удалить пост", "Пост будет удалён без восстановления.");
+    if (!confirmed) return;
     await _runAction("post-delete-${post.id}", () async {
       await ref.read(adminRemoteDataSourceProvider).deletePost(post.id);
       await Future.wait([_loadPosts(), _loadOverview()]);
@@ -266,9 +217,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   Future<void> _updateUserRole(AppUser user, String role) async {
     await _runAction("user-role-${user.id}", () async {
-      await ref
-          .read(authRepositoryProvider)
-          .updateUserRole(userId: user.id, role: role);
+      await ref.read(authRepositoryProvider).updateUserRole(userId: user.id, role: role);
       await _loadUsers();
     });
   }
@@ -296,14 +245,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) {
-        return _PointEditorSheet(categories: _categories, point: point);
-      },
+      builder: (context) => _PointEditorSheet(categories: _categories, point: point),
     );
 
-    if (input == null) {
-      return;
-    }
+    if (input == null) return;
 
     await _runAction(
       point == null ? "point-create" : "point-save-${point.id}",
@@ -311,9 +256,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         if (point == null) {
           await ref.read(adminRemoteDataSourceProvider).createMapPoint(input);
         } else {
-          await ref
-              .read(adminRemoteDataSourceProvider)
-              .updateMapPoint(pointId: point.id, input: input);
+          await ref.read(adminRemoteDataSourceProvider).updateMapPoint(pointId: point.id, input: input);
         }
         await Future.wait([_loadCategoriesAndPoints(), _loadOverview()]);
       },
@@ -321,14 +264,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   }
 
   Future<void> _deletePoint(AdminMapPoint point) async {
-    final confirmed = await _confirm(
-      "Удалить точку",
-      "Точка будет удалена с карты и из админки.",
-    );
-    if (!confirmed) {
-      return;
-    }
-
+    final confirmed = await _confirm("Удалить точку", "Точка будет удалена с карты.");
+    if (!confirmed) return;
     await _runAction("point-delete-${point.id}", () async {
       await ref.read(adminRemoteDataSourceProvider).deleteMapPoint(point.id);
       await Future.wait([_loadCategoriesAndPoints(), _loadOverview()]);
@@ -360,790 +297,724 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       );
     }
 
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Админка"),
-          actions: [
-            IconButton(
-              onPressed: () => _loadAll(),
-              icon: const Icon(Icons.refresh),
-              tooltip: "Обновить",
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            _buildOverview(),
-            Material(
-              color: Theme.of(context).colorScheme.surface,
-              child: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(text: "Посты"),
-                  Tab(text: "Пользователи"),
-                  Tab(text: "Точки"),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _PostsTab(
-                    posts: _posts,
-                    isLoading: _isLoadingPosts,
-                    error: _postsError,
-                    searchController: _postSearchController,
-                    selectedKind: _postKind,
-                    selectedStatus: _postStatus,
-                    busyKey: _busyKey,
-                    onRefresh: _loadPosts,
-                    onKindChanged: (value) => setState(() => _postKind = value),
-                    onStatusChanged: (value) =>
-                        setState(() => _postStatus = value),
-                    onView: (post) => context.push(
-                      AppRoutes.postDetail(
-                        postId: post.id,
-                        authorUsername: post.author.username,
-                        postSlug: post.slug,
-                      ),
-                    ),
-                    onEdit: (post) =>
-                        context.push(AppRoutes.postEditor(post.id)),
-                    onTogglePublished: _togglePostPublished,
-                    onDelete: _deletePost,
-                  ),
-                  _UsersTab(
-                    users: _users,
-                    isLoading: _isLoadingUsers,
-                    error: _usersError,
-                    searchController: _userSearchController,
-                    selectedRole: _userRole,
-                    selectedStatus: _userStatus,
-                    busyKey: _busyKey,
-                    onRefresh: _loadUsers,
-                    onRoleFilterChanged: (value) =>
-                        setState(() => _userRole = value),
-                    onStatusChanged: (value) =>
-                        setState(() => _userStatus = value),
-                    onRoleChanged: _updateUserRole,
-                    onWarn: (user) => _moderateUser(user, "warn"),
-                    onBan: (user) => _moderateUser(user, "ban"),
-                    onUnban: (user) => _moderateUser(user, "unban"),
-                  ),
-                  _PointsTab(
-                    points: _points,
-                    isLoading: _isLoadingPoints,
-                    error: _pointsError,
-                    searchController: _pointSearchController,
-                    selectedStatus: _pointStatus,
-                    categories: _categories,
-                    busyKey: _busyKey,
-                    onRefresh: _loadCategoriesAndPoints,
-                    onStatusChanged: (value) =>
-                        setState(() => _pointStatus = value),
-                    onCreate: () => _openPointEditor(),
-                    onEdit: _openPointEditor,
-                    onDelete: _deletePoint,
-                  ),
-                ],
-              ),
-            ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Админка"),
+        actions: [
+          IconButton(
+            onPressed: _loadAll,
+            icon: const Icon(Icons.refresh),
+            tooltip: "Обновить",
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(icon: Icon(Icons.article_outlined, size: 18), text: "Посты"),
+              Tab(icon: Icon(Icons.people_outline, size: 18), text: "Люди"),
+              Tab(icon: Icon(Icons.place_outlined, size: 18), text: "Точки"),
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildOverview() {
-    if (_isLoadingOverview && _overview == null) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: LinearProgressIndicator(),
-      );
-    }
-
-    if (_overview == null) {
-      return const SizedBox.shrink();
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
+      body: Column(
         children: [
-          _AdminStatCard(
-            title: "Посты",
-            value: "${_overview!.postsCount}",
-            caption:
-                "${_overview!.publishedPostsCount} опубликовано · ${_overview!.draftPostsCount} черновиков",
-          ),
-          const SizedBox(width: 12),
-          _AdminStatCard(
-            title: "Точки",
-            value: "${_overview!.mapPointsCount}",
-            caption:
-                "${_overview!.activeMapPointsCount} активных · ${_overview!.hiddenMapPointsCount} скрытых",
-          ),
-          const SizedBox(width: 12),
-          _AdminStatCard(
-            title: "Пользователи",
-            value: "${_overview!.usersCount}",
-            caption:
-                "${_overview!.adminsCount} админов · ${_overview!.bannedUsersCount} заблокировано",
+          _buildStatsBar(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildPostsTab(),
+                _buildUsersTab(),
+                _buildPointsTab(),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-}
 
-class _AdminStatCard extends StatelessWidget {
-  const _AdminStatCard({
-    required this.title,
-    required this.value,
-    required this.caption,
-  });
+  // ── Stats bar ──────────────────────────────────────────────────────────────
+  Widget _buildStatsBar() {
+    if (_isLoadingOverview && _overview == null) {
+      return const LinearProgressIndicator();
+    }
+    if (_overview == null) return const SizedBox.shrink();
 
-  final String title;
-  final String value;
-  final String caption;
-
-  @override
-  Widget build(BuildContext context) {
+    final ov = _overview!;
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
 
-    return SizedBox(
-      width: 220,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _StatChip(icon: Icons.article_outlined, label: "Посты", value: "${ov.postsCount}", sub: "${ov.publishedPostsCount} опубл · ${ov.draftPostsCount} черн"),
+            _statSep(muted),
+            _StatChip(icon: Icons.place_outlined, label: "Точки", value: "${ov.mapPointsCount}", sub: "${ov.activeMapPointsCount} акт · ${ov.hiddenMapPointsCount} скрыты"),
+            _statSep(muted),
+            _StatChip(icon: Icons.people_outline, label: "Люди", value: "${ov.usersCount}", sub: "${ov.adminsCount} адм · ${ov.bannedUsersCount} бан"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statSep(Color color) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    child: Text("|", style: TextStyle(color: color)),
+  );
+
+  // ── Posts tab ──────────────────────────────────────────────────────────────
+  Widget _buildPostsTab() {
+    if (_isLoadingPosts && _posts.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_postsError != null && _posts.isEmpty) {
+      return AppErrorState(
+        title: "Не удалось загрузить посты",
+        message: _postsError!,
+        onRetry: _loadPosts,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // Inline filters
+        _buildSearchField(_postSearchController, "Поиск постов", _loadPosts),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                value: _postKind,
+                items: const {"all": "Все типы", "news": "Новости", "story": "Истории", "event": "События"},
+                onChanged: (v) { setState(() => _postKind = v); _loadPosts(); },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown(
+                value: _postStatus,
+                items: const {"all": "Все", "published": "Опубл.", "draft": "Черновики"},
+                onChanged: (v) { setState(() => _postStatus = v); _loadPosts(); },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _buildDropdown(
+          value: _postOrdering,
+          items: const {"recent": "По дате", "popular": "По популярности", "recommended": "По рекомендациям"},
+          onChanged: (v) { setState(() => _postOrdering = v); _loadPosts(); },
+        ),
+        const SizedBox(height: 12),
+        if (_posts.isEmpty)
+          const AppEmptyState(title: "Посты не найдены", message: "Попробуйте изменить фильтры.")
+        else
+          for (final post in _posts) ...[
+            _PostCard(
+              post: post,
+              busyKey: _busyKey,
+              onView: (post) => context.push(
+                AppRoutes.postDetail(postId: post.id, authorUsername: post.author.username, postSlug: post.slug),
+              ),
+              onEdit: (post) => context.push(AppRoutes.postEditor(post.id)),
+              onTogglePublished: _togglePostPublished,
+              onDelete: _deletePost,
+            ),
+            const SizedBox(height: 6),
+          ],
+      ],
+    );
+  }
+
+  // ── Users tab ──────────────────────────────────────────────────────────────
+  Widget _buildUsersTab() {
+    if (_isLoadingUsers && _users.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_usersError != null && _users.isEmpty) {
+      return AppErrorState(
+        title: "Не удалось загрузить пользователей",
+        message: _usersError!,
+        onRetry: _loadUsers,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        _buildSearchField(_userSearchController, "Поиск пользователей", _loadUsers),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                value: _userRole,
+                items: const {"all": "Все роли", "admin": "Админы", "support": "Поддержка", "moderator": "Моды", "user": "Юзеры"},
+                onChanged: (v) { setState(() => _userRole = v); _loadUsers(); },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown(
+                value: _userStatus,
+                items: const {"all": "Все", "active": "Активные", "banned": "Заблок."},
+                onChanged: (v) { setState(() => _userStatus = v); _loadUsers(); },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_users.isEmpty)
+          const AppEmptyState(title: "Пользователи не найдены", message: "Проверьте фильтры.")
+        else
+          for (final user in _users) ...[
+            _UserCard(
+              user: user,
+              busyKey: _busyKey,
+              onRoleChanged: _updateUserRole,
+              onWarn: (u) => _moderateUser(u, "warn"),
+              onBan: (u) => _moderateUser(u, "ban"),
+              onUnban: (u) => _moderateUser(u, "unban"),
+            ),
+            const SizedBox(height: 6),
+          ],
+      ],
+    );
+  }
+
+  // ── Points tab ─────────────────────────────────────────────────────────────
+  Widget _buildPointsTab() {
+    return Column(
+      children: [
+        // Mode selector
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(
             children: [
-              Text(title, style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+              Expanded(
+                child: _ModeButton(
+                  label: "Список",
+                  icon: Icons.list,
+                  isActive: _mapMode == _MapMode.list,
+                  onTap: () => setState(() => _mapMode = _MapMode.list),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                caption,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ModeButton(
+                  label: "Создать / Редактировать",
+                  icon: Icons.add_location_alt_outlined,
+                  isActive: _mapMode == _MapMode.create,
+                  onTap: () => setState(() => _mapMode = _MapMode.create),
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _mapMode == _MapMode.list
+              ? _buildPointsListView()
+              : _buildPointCreateButton(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPointsListView() {
+    if (_isLoadingPoints && _points.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_pointsError != null && _points.isEmpty) {
+      return AppErrorState(
+        title: "Не удалось загрузить точки",
+        message: _pointsError!,
+        onRetry: _loadCategoriesAndPoints,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      children: [
+        _buildSearchField(_pointSearchController, "Поиск точек", _loadCategoriesAndPoints),
+        const SizedBox(height: 8),
+        _buildDropdown(
+          value: _pointStatus,
+          items: const {"all": "Все точки", "active": "Активные", "hidden": "Скрытые"},
+          onChanged: (v) { setState(() => _pointStatus = v); _loadCategoriesAndPoints(); },
+        ),
+        const SizedBox(height: 12),
+        if (_points.isEmpty)
+          const AppEmptyState(title: "Точки не найдены", message: "Измените фильтры или создайте точку.")
+        else
+          for (final point in _points) ...[
+            _PointCard(
+              point: point,
+              busyKey: _busyKey,
+              onEdit: () => _openPointEditor(point),
+              onDelete: () => _deletePoint(point),
+            ),
+            const SizedBox(height: 6),
+          ],
+      ],
+    );
+  }
+
+  Widget _buildPointCreateButton() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton.icon(
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text("Новая точка"),
+              onPressed: _categories.isEmpty ? null : () => _openPointEditor(),
+            ),
+            if (_categories.isEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                "Загрузка категорий...",
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  Widget _buildSearchField(TextEditingController controller, String hint, VoidCallback onSubmit) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.search, size: 18),
+        isDense: true,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+      onSubmitted: (_) => onSubmit(),
+      textInputAction: TextInputAction.search,
+    );
+  }
+
+  Widget _buildDropdown({
+    required String value,
+    required Map<String, String> items,
+    required void Function(String) onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isDense: true,
+      decoration: const InputDecoration(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis))).toList(),
+      onChanged: (v) { if (v != null) onChanged(v); },
+    );
+  }
+}
+
+// ── Stat chip ──────────────────────────────────────────────────────────────
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.icon, required this.label, required this.value, required this.sub});
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text("$label: ", style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        Text(value, style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 4),
+        Text(sub, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontSize: 10)),
+      ],
+    );
+  }
+}
+
+// ── Mode button ────────────────────────────────────────────────────────────
+class _ModeButton extends StatelessWidget {
+  const _ModeButton({required this.label, required this.icon, required this.isActive, required this.onTap});
+
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isActive ? theme.colorScheme.primary : theme.colorScheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: isActive ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: isActive ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _PostsTab extends StatelessWidget {
-  const _PostsTab({
-    required this.posts,
-    required this.isLoading,
-    required this.error,
-    required this.searchController,
-    required this.selectedKind,
-    required this.selectedStatus,
+// ── Status badge ───────────────────────────────────────────────────────────
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color.withValues(alpha: 0.12);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+}
+
+Color _postStatusColor(BuildContext context, bool isPublished) {
+  return isPublished ? Colors.green.shade700 : Colors.grey.shade600;
+}
+
+Color _pointStatusColor(bool isActive) =>
+    isActive ? Colors.green.shade700 : Colors.amber.shade800;
+
+Color _userStatusColor(bool isBanned) =>
+    isBanned ? Colors.red.shade700 : Colors.green.shade700;
+
+// ── Post card ──────────────────────────────────────────────────────────────
+class _PostCard extends StatelessWidget {
+  const _PostCard({
+    required this.post,
     required this.busyKey,
-    required this.onRefresh,
-    required this.onKindChanged,
-    required this.onStatusChanged,
     required this.onView,
     required this.onEdit,
     required this.onTogglePublished,
     required this.onDelete,
   });
 
-  final List<FeedPost> posts;
-  final bool isLoading;
-  final String? error;
-  final TextEditingController searchController;
-  final String selectedKind;
-  final String selectedStatus;
+  final FeedPost post;
   final String? busyKey;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<String> onKindChanged;
-  final ValueChanged<String> onStatusChanged;
-  final void Function(FeedPost post) onView;
-  final void Function(FeedPost post) onEdit;
-  final Future<void> Function(FeedPost post) onTogglePublished;
-  final Future<void> Function(FeedPost post) onDelete;
+  final void Function(FeedPost) onView;
+  final void Function(FeedPost) onEdit;
+  final Future<void> Function(FeedPost) onTogglePublished;
+  final Future<void> Function(FeedPost) onDelete;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading && posts.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (error != null && posts.isEmpty) {
-      return AppErrorState(
-        title: "Не удалось загрузить посты",
-        message: error!,
-        onRetry: () => onRefresh(),
-      );
-    }
+    final theme = Theme.of(context);
+    final statusColor = _postStatusColor(context, post.isPublished);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: "Поиск",
-                    border: OutlineInputBorder(),
-                  ),
+                _StatusBadge(
+                  label: post.isPublished ? "Опубликован" : "Черновик",
+                  color: statusColor,
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(
-                    labelText: "Тип",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: "all", child: Text("Все типы")),
-                    DropdownMenuItem(value: "news", child: Text("Новости")),
-                    DropdownMenuItem(value: "story", child: Text("Истории")),
-                    DropdownMenuItem(value: "event", child: Text("События")),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onKindChanged(value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedStatus,
-                  decoration: const InputDecoration(
-                    labelText: "Статус",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: "all",
-                      child: Text("Все публикации"),
-                    ),
-                    DropdownMenuItem(
-                      value: "published",
-                      child: Text("Опубликованные"),
-                    ),
-                    DropdownMenuItem(value: "draft", child: Text("Черновики")),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onStatusChanged(value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => onRefresh(),
-                    child: const Text("Применить"),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    post.title.isEmpty ? "Без заголовка" : post.title,
+                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (posts.isEmpty)
-          const AppEmptyState(
-            title: "Посты не найдены",
-            message: "Попробуйте изменить фильтры или создать новый материал.",
-          )
-        else
-          for (final post in posts) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                post.title.isEmpty
-                                    ? "Без заголовка"
-                                    : post.title,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "@${post.author.name} · ${formatPostDate(post.publishedAt)}",
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Chip(
-                          label: Text(
-                            post.isPublished ? "Опубликован" : "Черновик",
-                          ),
-                        ),
-                      ],
+            const SizedBox(height: 4),
+            Text(
+              "@${post.author.name} · ${formatPostDate(post.publishedAt)}",
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text("👁 ${post.viewCount}", style: theme.textTheme.labelSmall),
+                const SizedBox(width: 10),
+                Text("❤️ ${post.likesCount}", style: theme.textTheme.labelSmall),
+                const SizedBox(width: 10),
+                Text("💬 ${post.commentsCount}", style: theme.textTheme.labelSmall),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ActionChip(
+                  label: const Text("Открыть"),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => onView(post),
+                ),
+                const SizedBox(width: 6),
+                ActionChip(
+                  label: const Text("Изменить"),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => onEdit(post),
+                ),
+                const Spacer(),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, size: 20),
+                  onSelected: (v) {
+                    if (v == "toggle") onTogglePublished(post);
+                    if (v == "delete") onDelete(post);
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: "toggle",
+                      enabled: busyKey != "post-${post.id}",
+                      child: Text(post.isPublished ? "В черновик" : "Опубликовать"),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      post.previewText.isEmpty ? post.body : post.previewText,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ActionChip(
-                          label: const Text("Открыть"),
-                          onPressed: () => onView(post),
-                        ),
-                        ActionChip(
-                          label: const Text("Редактировать"),
-                          onPressed: () => onEdit(post),
-                        ),
-                        ActionChip(
-                          label: Text(
-                            post.isPublished ? "В черновик" : "Опубликовать",
-                          ),
-                          onPressed: busyKey == "post-${post.id}"
-                              ? null
-                              : () => onTogglePublished(post),
-                        ),
-                        ActionChip(
-                          label: const Text("Удалить"),
-                          onPressed: busyKey == "post-delete-${post.id}"
-                              ? null
-                              : () => onDelete(post),
-                        ),
-                      ],
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: "delete",
+                      enabled: busyKey != "post-delete-${post.id}",
+                      child: const Text("Удалить", style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
           ],
-      ],
+        ),
+      ),
     );
   }
 }
 
-class _UsersTab extends StatelessWidget {
-  const _UsersTab({
-    required this.users,
-    required this.isLoading,
-    required this.error,
-    required this.searchController,
-    required this.selectedRole,
-    required this.selectedStatus,
+// ── User card ──────────────────────────────────────────────────────────────
+class _UserCard extends StatelessWidget {
+  const _UserCard({
+    required this.user,
     required this.busyKey,
-    required this.onRefresh,
-    required this.onRoleFilterChanged,
-    required this.onStatusChanged,
     required this.onRoleChanged,
     required this.onWarn,
     required this.onBan,
     required this.onUnban,
   });
 
-  final List<AppUser> users;
-  final bool isLoading;
-  final String? error;
-  final TextEditingController searchController;
-  final String selectedRole;
-  final String selectedStatus;
+  final AppUser user;
   final String? busyKey;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<String> onRoleFilterChanged;
-  final ValueChanged<String> onStatusChanged;
-  final Future<void> Function(AppUser user, String role) onRoleChanged;
-  final Future<void> Function(AppUser user) onWarn;
-  final Future<void> Function(AppUser user) onBan;
-  final Future<void> Function(AppUser user) onUnban;
+  final Future<void> Function(AppUser, String) onRoleChanged;
+  final Future<void> Function(AppUser) onWarn;
+  final Future<void> Function(AppUser) onBan;
+  final Future<void> Function(AppUser) onUnban;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading && users.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (error != null && users.isEmpty) {
-      return AppErrorState(
-        title: "Не удалось загрузить пользователей",
-        message: error!,
-        onRetry: () => onRefresh(),
-      );
-    }
+    final theme = Theme.of(context);
+    final statusColor = _userStatusColor(user.isBanned);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: "Поиск",
-                    border: OutlineInputBorder(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.displayName, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      Text("@${user.username} · ${user.email}", style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedRole,
-                  decoration: const InputDecoration(
-                    labelText: "Роль",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: "all", child: Text("Все роли")),
-                    DropdownMenuItem(value: "admin", child: Text("Админы")),
-                    DropdownMenuItem(
-                      value: "support",
-                      child: Text("Техподдержка"),
-                    ),
-                    DropdownMenuItem(
-                      value: "moderator",
-                      child: Text("Модераторы"),
-                    ),
-                    DropdownMenuItem(
-                      value: "user",
-                      child: Text("Пользователи"),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onRoleFilterChanged(value);
-                    }
-                  },
+                _StatusBadge(
+                  label: user.isBanned ? "Забанен" : "Активен",
+                  color: statusColor,
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedStatus,
-                  decoration: const InputDecoration(
-                    labelText: "Статус",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: "all", child: Text("Все статусы")),
-                    DropdownMenuItem(value: "active", child: Text("Активные")),
-                    DropdownMenuItem(
-                      value: "banned",
-                      child: Text("Заблокированные"),
-                    ),
-                    DropdownMenuItem(
-                      value: "admin",
-                      child: Text("С доступом к админке"),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onStatusChanged(value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => onRefresh(),
-                    child: const Text("Применить"),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                RoleChip(role: user.role),
+                const SizedBox(width: 8),
+                // Compact role dropdown
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: user.role,
+                    isDense: true,
+                    isExpanded: true,
+                    underline: Container(height: 1, color: theme.colorScheme.outlineVariant),
+                    items: const [
+                      DropdownMenuItem(value: "admin", child: Text("Админ")),
+                      DropdownMenuItem(value: "support", child: Text("Поддержка")),
+                      DropdownMenuItem(value: "moderator", child: Text("Модератор")),
+                      DropdownMenuItem(value: "user", child: Text("Пользователь")),
+                    ],
+                    onChanged: busyKey == "user-role-${user.id}"
+                        ? null
+                        : (v) { if (v != null) onRoleChanged(user, v); },
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (users.isEmpty)
-          const AppEmptyState(
-            title: "Пользователи не найдены",
-            message: "Проверьте фильтры или строку поиска.",
-          )
-        else
-          for (final user in users) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text("@${user.username} · ${user.email}"),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        RoleChip(role: user.role),
-                        Chip(
-                          label: Text(
-                            user.isBanned ? "Заблокирован" : "Активен",
-                          ),
-                        ),
-                        if (user.canAccessAdmin)
-                          const Chip(label: Text("Админ-доступ")),
-                        if (user.canAccessSupport)
-                          const Chip(label: Text("Доступ к поддержке")),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: user.role,
-                      decoration: const InputDecoration(
-                        labelText: "Роль пользователя",
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: "admin", child: Text("Админ")),
-                        DropdownMenuItem(
-                          value: "support",
-                          child: Text("Техподдержка"),
-                        ),
-                        DropdownMenuItem(
-                          value: "moderator",
-                          child: Text("Модератор"),
-                        ),
-                        DropdownMenuItem(
-                          value: "user",
-                          child: Text("Пользователь"),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          onRoleChanged(user, value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ActionChip(
-                          label: const Text("Предупредить"),
-                          onPressed: busyKey == "user-warn-${user.id}"
-                              ? null
-                              : () => onWarn(user),
-                        ),
-                        ActionChip(
-                          label: Text(
-                            user.isBanned ? "Разблокировать" : "Заблокировать",
-                          ),
-                          onPressed:
-                              busyKey == "user-ban-${user.id}" ||
-                                  busyKey == "user-unban-${user.id}"
-                              ? null
-                              : () =>
-                                    user.isBanned ? onUnban(user) : onBan(user),
-                        ),
-                      ],
-                    ),
-                  ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Text("⚠️", style: TextStyle(fontSize: 18)),
+                  tooltip: "Предупредить",
+                  onPressed: busyKey == "user-warn-${user.id}" ? null : () => onWarn(user),
+                  visualDensity: VisualDensity.compact,
                 ),
-              ),
+                if (user.isBanned)
+                  IconButton(
+                    icon: const Text("🔓", style: TextStyle(fontSize: 18)),
+                    tooltip: "Разблокировать",
+                    onPressed: busyKey == "user-unban-${user.id}" ? null : () => onUnban(user),
+                    visualDensity: VisualDensity.compact,
+                  )
+                else
+                  IconButton(
+                    icon: const Text("🚫", style: TextStyle(fontSize: 18)),
+                    tooltip: "Заблокировать",
+                    onPressed: busyKey == "user-ban-${user.id}" ? null : () => onBan(user),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
             ),
-            const SizedBox(height: 12),
           ],
-      ],
+        ),
+      ),
     );
   }
 }
 
-class _PointsTab extends StatelessWidget {
-  const _PointsTab({
-    required this.points,
-    required this.isLoading,
-    required this.error,
-    required this.searchController,
-    required this.selectedStatus,
-    required this.categories,
-    required this.busyKey,
-    required this.onRefresh,
-    required this.onStatusChanged,
-    required this.onCreate,
-    required this.onEdit,
-    required this.onDelete,
-  });
+// ── Point card ─────────────────────────────────────────────────────────────
+class _PointCard extends StatelessWidget {
+  const _PointCard({required this.point, required this.busyKey, required this.onEdit, required this.onDelete});
 
-  final List<AdminMapPoint> points;
-  final bool isLoading;
-  final String? error;
-  final TextEditingController searchController;
-  final String selectedStatus;
-  final List<EcoMapCategory> categories;
+  final AdminMapPoint point;
   final String? busyKey;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<String> onStatusChanged;
-  final VoidCallback onCreate;
-  final Future<void> Function(AdminMapPoint point) onEdit;
-  final Future<void> Function(AdminMapPoint point) onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading && points.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (error != null && points.isEmpty) {
-      return AppErrorState(
-        title: "Не удалось загрузить точки",
-        message: error!,
-        onRetry: () => onRefresh(),
-      );
-    }
+    final theme = Theme.of(context);
+    final statusColor = _pointStatusColor(point.isActive);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: "Поиск",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedStatus,
-                  decoration: const InputDecoration(
-                    labelText: "Статус",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: "all", child: Text("Все точки")),
-                    DropdownMenuItem(value: "active", child: Text("Активные")),
-                    DropdownMenuItem(value: "hidden", child: Text("Скрытые")),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onStatusChanged(value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => onRefresh(),
-                        child: const Text("Применить"),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.tonal(
-                        onPressed: categories.isEmpty ? null : onCreate,
-                        child: const Text("Новая точка"),
-                      ),
-                    ),
-                  ],
+                _StatusBadge(label: point.isActive ? "Активна" : "Скрыта", color: statusColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(point.title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (points.isEmpty)
-          const AppEmptyState(
-            title: "Точки не найдены",
-            message: "Измените фильтры или создайте новую точку.",
-          )
-        else
-          for (final point in points) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            point.title,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        Chip(
-                          label: Text(point.isActive ? "Активна" : "Скрыта"),
-                        ),
-                      ],
+            if (point.address.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(point.address, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
+            if (point.categories.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final cat in point.categories)
+                    Chip(
+                      label: Text(cat.title, style: const TextStyle(fontSize: 11)),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                     ),
-                    const SizedBox(height: 4),
-                    Text(point.address.isEmpty ? point.slug : point.address),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final category in point.categories)
-                          Chip(label: Text(category.title)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ActionChip(
-                          label: const Text("Редактировать"),
-                          onPressed: () => onEdit(point),
-                        ),
-                        ActionChip(
-                          label: const Text("Удалить"),
-                          onPressed: busyKey == "point-delete-${point.id}"
-                              ? null
-                              : () => onDelete(point),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                ],
               ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ActionChip(
+                  label: const Text("Редактировать"),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                ),
+                const SizedBox(width: 6),
+                ActionChip(
+                  label: const Text("Удалить"),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: busyKey == "point-delete-${point.id}" ? null : onDelete,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
           ],
-      ],
+        ),
+      ),
     );
   }
 }
 
+// ── Point editor sheet ─────────────────────────────────────────────────────
 class _PointEditorSheet extends StatefulWidget {
   const _PointEditorSheet({required this.categories, this.point});
 
@@ -1157,62 +1028,46 @@ class _PointEditorSheet extends StatefulWidget {
 class _PointEditorSheetState extends State<_PointEditorSheet> {
   late final TextEditingController _slugController;
   late final TextEditingController _titleController;
-  late final TextEditingController _shortDescriptionController;
-  late final TextEditingController _descriptionController;
+  late final TextEditingController _shortDescController;
+  late final TextEditingController _descController;
   late final TextEditingController _addressController;
   late final TextEditingController _workingHoursController;
-  late final TextEditingController _latitudeController;
-  late final TextEditingController _longitudeController;
+  late final TextEditingController _latController;
+  late final TextEditingController _lngController;
   late final TextEditingController _sortOrderController;
   late final TextEditingController _imageUrlsController;
   late bool _isActive;
   late Set<int> _selectedCategoryIds;
 
+  bool _coordsExpanded = false;
+  bool _catsExpanded = true;
+  bool _extraExpanded = false;
+
   @override
   void initState() {
     super.initState();
-    final point = widget.point;
-    _slugController = TextEditingController(text: point?.slug ?? "");
-    _titleController = TextEditingController(text: point?.title ?? "");
-    _shortDescriptionController = TextEditingController(
-      text: point?.shortDescription ?? "",
-    );
-    _descriptionController = TextEditingController(
-      text: point?.description ?? "",
-    );
-    _addressController = TextEditingController(text: point?.address ?? "");
-    _workingHoursController = TextEditingController(
-      text: point?.workingHours ?? "",
-    );
-    _latitudeController = TextEditingController(
-      text: point != null ? "${point.latitude}" : "",
-    );
-    _longitudeController = TextEditingController(
-      text: point != null ? "${point.longitude}" : "",
-    );
-    _sortOrderController = TextEditingController(
-      text: point != null ? "${point.sortOrder}" : "0",
-    );
+    final p = widget.point;
+    _slugController = TextEditingController(text: p?.slug ?? "");
+    _titleController = TextEditingController(text: p?.title ?? "");
+    _shortDescController = TextEditingController(text: p?.shortDescription ?? "");
+    _descController = TextEditingController(text: p?.description ?? "");
+    _addressController = TextEditingController(text: p?.address ?? "");
+    _workingHoursController = TextEditingController(text: p?.workingHours ?? "");
+    _latController = TextEditingController(text: p != null ? "${p.latitude}" : "");
+    _lngController = TextEditingController(text: p != null ? "${p.longitude}" : "");
+    _sortOrderController = TextEditingController(text: p != null ? "${p.sortOrder}" : "0");
     _imageUrlsController = TextEditingController(
-      text: point?.images.map((image) => image.imageUrl).join("\n") ?? "",
+      text: p?.images.map((i) => i.imageUrl).join("\n") ?? "",
     );
-    _isActive = point?.isActive ?? true;
-    _selectedCategoryIds =
-        point?.categories.map((item) => item.id).toSet() ?? <int>{};
+    _isActive = p?.isActive ?? true;
+    _selectedCategoryIds = p?.categories.map((c) => c.id).toSet() ?? <int>{};
   }
 
   @override
   void dispose() {
-    _slugController.dispose();
-    _titleController.dispose();
-    _shortDescriptionController.dispose();
-    _descriptionController.dispose();
-    _addressController.dispose();
-    _workingHoursController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
-    _sortOrderController.dispose();
-    _imageUrlsController.dispose();
+    for (final c in [_slugController, _titleController, _shortDescController, _descController, _addressController, _workingHoursController, _latController, _lngController, _sortOrderController, _imageUrlsController]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -1220,9 +1075,7 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
+        left: 20, right: 20, top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: SingleChildScrollView(
@@ -1231,121 +1084,150 @@ class _PointEditorSheetState extends State<_PointEditorSheet> {
           children: [
             Text(
               widget.point == null ? "Новая точка" : "Редактор точки",
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
-            for (final field in [
-              (_titleController, "Название", 1),
-              (_slugController, "Slug", 1),
-              (_shortDescriptionController, "Краткое описание", 2),
-              (_descriptionController, "Описание", 4),
-              (_addressController, "Адрес", 2),
-              (_workingHoursController, "Часы работы", 1),
-              (_latitudeController, "Широта", 1),
-              (_longitudeController, "Долгота", 1),
-              (_sortOrderController, "Порядок сортировки", 1),
-              (
-                _imageUrlsController,
-                "Изображения (по одной ссылке на строку)",
-                4,
+
+            // Основное
+            _section("Основное", true, [
+              _field(_titleController, "Название"),
+              _field(_slugController, "Slug"),
+              _field(_shortDescController, "Краткое описание", maxLines: 2),
+              _field(_descController, "Описание", maxLines: 4),
+              _field(_addressController, "Адрес"),
+              _field(_workingHoursController, "Часы работы"),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isActive,
+                onChanged: (v) => setState(() => _isActive = v),
+                title: const Text("Показывать на карте"),
+                dense: true,
               ),
-            ]) ...[
-              TextField(
-                controller: field.$1,
-                minLines: field.$3,
-                maxLines: field.$3 == 1 ? 1 : field.$3 + 2,
-                decoration: InputDecoration(
-                  labelText: field.$2,
-                  border: const OutlineInputBorder(),
-                ),
+            ]),
+
+            // Координаты
+            _expandable("Координаты", _coordsExpanded, (v) => setState(() => _coordsExpanded = v), [
+              Row(
+                children: [
+                  Expanded(child: _field(_latController, "Широта")),
+                  const SizedBox(width: 12),
+                  Expanded(child: _field(_lngController, "Долгота")),
+                ],
               ),
-              const SizedBox(height: 12),
-            ],
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _isActive,
-              onChanged: (value) => setState(() => _isActive = value),
-              title: const Text("Показывать на карте"),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final category in widget.categories)
-                  FilterChip(
-                    label: Text(category.title),
-                    selected: _selectedCategoryIds.contains(category.id),
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedCategoryIds.add(category.id);
-                        } else {
-                          _selectedCategoryIds.remove(category.id);
-                        }
-                      });
-                    },
-                  ),
-              ],
-            ),
+            ]),
+
+            // Категории
+            _expandable("Категории", _catsExpanded, (v) => setState(() => _catsExpanded = v), [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: widget.categories.map((cat) {
+                  final selected = _selectedCategoryIds.contains(cat.id);
+                  return FilterChip(
+                    label: Text(cat.title),
+                    selected: selected,
+                    onSelected: (s) => setState(() {
+                      if (s) { _selectedCategoryIds.add(cat.id); } else { _selectedCategoryIds.remove(cat.id); }
+                    }),
+                  );
+                }).toList(),
+              ),
+            ]),
+
+            // Дополнительно
+            _expandable("Дополнительно", _extraExpanded, (v) => setState(() => _extraExpanded = v), [
+              _field(_sortOrderController, "Порядок сортировки"),
+              _field(_imageUrlsController, "Изображения (одна ссылка на строку)", maxLines: 3),
+            ]),
+
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {
-                  final latitude = double.tryParse(
-                    _latitudeController.text.trim(),
-                  );
-                  final longitude = double.tryParse(
-                    _longitudeController.text.trim(),
-                  );
-                  final sortOrder =
-                      int.tryParse(_sortOrderController.text.trim()) ?? 0;
-
-                  if (_titleController.text.trim().isEmpty ||
-                      _slugController.text.trim().isEmpty ||
-                      latitude == null ||
-                      longitude == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          "Заполните название, slug и корректные координаты.",
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  Navigator.of(context).pop(
-                    AdminMapPointInput(
-                      slug: _slugController.text.trim(),
-                      title: _titleController.text.trim(),
-                      shortDescription: _shortDescriptionController.text.trim(),
-                      description: _descriptionController.text.trim(),
-                      address: _addressController.text.trim(),
-                      workingHours: _workingHoursController.text.trim(),
-                      latitude: latitude,
-                      longitude: longitude,
-                      isActive: _isActive,
-                      sortOrder: sortOrder,
-                      categoryIds: _selectedCategoryIds.toList(),
-                      imageUrls: _imageUrlsController.text
-                          .split("\n")
-                          .map((value) => value.trim())
-                          .where((value) => value.isNotEmpty)
-                          .toList(),
-                    ),
-                  );
-                },
-                child: Text(
-                  widget.point == null ? "Создать точку" : "Сохранить",
-                ),
+                onPressed: _submit,
+                child: Text(widget.point == null ? "Создать точку" : "Сохранить"),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _section(String title, bool open, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        ),
+        ...children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 10), child: c)),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  Widget _expandable(String title, bool open, void Function(bool) onToggle, List<Widget> children) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => onToggle(!open),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Icon(open ? Icons.expand_less : Icons.expand_more, size: 18),
+              ],
+            ),
+          ),
+        ),
+        if (open) ...[
+          ...children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 10), child: c)),
+        ],
+        const Divider(height: 1),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _field(TextEditingController c, String label, {int maxLines = 1}) {
+    return TextField(
+      controller: c,
+      minLines: maxLines,
+      maxLines: maxLines == 1 ? 1 : maxLines + 2,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
+    );
+  }
+
+  void _submit() {
+    final lat = double.tryParse(_latController.text.trim());
+    final lng = double.tryParse(_lngController.text.trim());
+    final sortOrder = int.tryParse(_sortOrderController.text.trim()) ?? 0;
+
+    if (_titleController.text.trim().isEmpty || _slugController.text.trim().isEmpty || lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Заполните название, slug и координаты.")),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(
+      AdminMapPointInput(
+        slug: _slugController.text.trim(),
+        title: _titleController.text.trim(),
+        shortDescription: _shortDescController.text.trim(),
+        description: _descController.text.trim(),
+        address: _addressController.text.trim(),
+        workingHours: _workingHoursController.text.trim(),
+        latitude: lat,
+        longitude: lng,
+        isActive: _isActive,
+        sortOrder: sortOrder,
+        categoryIds: _selectedCategoryIds.toList(),
+        imageUrls: _imageUrlsController.text.split("\n").map((v) => v.trim()).where((v) => v.isNotEmpty).toList(),
       ),
     );
   }
