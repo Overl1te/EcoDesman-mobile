@@ -19,10 +19,14 @@ class ImageUploadService {
 
   final Dio _dio;
 
-  Future<String> uploadImage(String filePath) async {
-    final fileName = filePath.split(RegExp(r"[\\\\/]")).last;
+  Future<String> uploadImage(String filePath, {String? fileName}) async {
+    final resolvedFileName =
+        fileName ?? filePath.split(RegExp(r"[\\\\/]")).last;
     final formData = FormData.fromMap({
-      "file": await MultipartFile.fromFile(filePath, filename: fileName),
+      "file": await MultipartFile.fromFile(
+        filePath,
+        filename: resolvedFileName,
+      ),
     });
 
     final response = await _dio.post(

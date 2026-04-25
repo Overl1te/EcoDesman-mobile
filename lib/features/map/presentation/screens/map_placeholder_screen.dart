@@ -36,8 +36,31 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
     lon: 43.974881,
     lat: 56.315048,
   );
-  static const String _openFreeMapLibertyStyleUrl =
-      "https://tiles.openfreemap.org/styles/liberty";
+  static const String _osmRasterStyle = '''
+{
+  "version": 8,
+  "name": "EcoDesman OSM raster",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "(c) OpenStreetMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm"
+    }
+  ]
+}
+''';
   static const double _initialZoom = 11.8;
   static const double _twoDimensionalPitch = 0;
   static const double _threeDimensionalPitch = 52;
@@ -560,9 +583,9 @@ class _MapPlaceholderScreenState extends ConsumerState<MapPlaceholderScreen> {
         return Stack(
           children: [
             MapLibreMap(
-              key: const ValueKey("mobile-map-openfreemap-liberty"),
+              key: const ValueKey("mobile-map-osm-raster"),
               options: MapOptions(
-                initStyle: _openFreeMapLibertyStyleUrl,
+                initStyle: _osmRasterStyle,
                 initCenter: _nizhnyNovgorodCenter,
                 initZoom: _initialZoom,
                 initPitch: _isThreeDimensional

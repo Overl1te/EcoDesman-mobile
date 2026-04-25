@@ -179,7 +179,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
       final url = await ref
           .read(imageUploadServiceProvider)
-          .uploadImage(croppedPath);
+          .uploadImage(croppedPath, fileName: "profile-avatar.png");
       if (!mounted) {
         return;
       }
@@ -278,7 +278,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
       final url = await ref
           .read(imageUploadServiceProvider)
-          .uploadImage(croppedPath);
+          .uploadImage(croppedPath, fileName: "profile-avatar.png");
       final success = await _applyAvatarChange(url);
 
       if (!mounted) {
