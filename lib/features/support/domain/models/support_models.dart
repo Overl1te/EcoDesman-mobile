@@ -320,15 +320,30 @@ class HelpDocument {
 }
 
 class HelpContactBlock {
-  const HelpContactBlock({required this.title, required this.email});
+  const HelpContactBlock({
+    required this.title,
+    required this.email,
+    required this.operator,
+    required this.inn,
+    required this.ogrn,
+    required this.address,
+  });
 
   final String title;
   final String email;
+  final String operator;
+  final String inn;
+  final String ogrn;
+  final String address;
 
   factory HelpContactBlock.fromJson(Map<String, dynamic> json) {
     return HelpContactBlock(
       title: json["title"] as String? ?? "",
       email: json["email"] as String? ?? "",
+      operator: json["operator"] as String? ?? "",
+      inn: json["inn"] as String? ?? "",
+      ogrn: json["ogrn"] as String? ?? "",
+      address: json["address"] as String? ?? "",
     );
   }
 }

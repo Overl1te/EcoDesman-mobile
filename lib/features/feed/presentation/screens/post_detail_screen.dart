@@ -590,21 +590,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    FilledButton.tonalIcon(
-                      onPressed: () => _toggleLike(post),
-                      icon: Icon(
-                        post.isLiked ? Icons.favorite : Icons.favorite_border,
-                      ),
-                      label: Text("${post.likesCount} лайков"),
+                    _MetricChip(
+                      icon: post.isLiked
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      label: "${post.likesCount} лайков",
+                      color: post.isLiked ? theme.colorScheme.error : null,
+                      onTap: () => _toggleLike(post),
                     ),
-                    FilledButton.tonalIcon(
-                      onPressed: () => _toggleFavorite(post),
-                      icon: Icon(
-                        post.isFavorited
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
-                      ),
-                      label: Text("${post.favoritesCount} в избранном"),
+                    _MetricChip(
+                      icon: post.isFavorited
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
+                      label: "${post.favoritesCount} в избранном",
+                      color: post.isFavorited
+                          ? theme.colorScheme.primary
+                          : null,
+                      onTap: () => _toggleFavorite(post),
                     ),
                     if (!post.isOwner)
                       OutlinedButton.icon(
@@ -838,17 +840,35 @@ class _EventInfoCard extends StatelessWidget {
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.icon, required this.label});
+  const _MetricChip({
+    required this.icon,
+    required this.label,
+    this.color,
+    this.onTap,
+  });
 
   final IconData icon;
   final String label;
+  final Color? color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
+    final avatar = Icon(icon, size: 18, color: color);
+    final labelWidget = Text(
+      label,
+      style: color == null ? null : TextStyle(color: color),
+    );
+
+    if (onTap == null) {
+      return Chip(avatar: avatar, label: labelWidget, side: BorderSide.none);
+    }
+
+    return ActionChip(
+      avatar: avatar,
+      label: labelWidget,
       side: BorderSide.none,
+      onPressed: onTap,
     );
   }
 }

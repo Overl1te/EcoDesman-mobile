@@ -111,35 +111,26 @@ jobs:
           set -euo pipefail
 
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/EcoDesman-${{ steps.version.outputs.full }}.apk"
-          aab_note="AAB was not produced by this run."
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/EcoDesman-${{ steps.version.outputs.app }}.apk"
           if [ -f build/app/outputs/bundle/release/app-release.aab ]; then
-            cp build/app/outputs/bundle/release/app-release.aab "dist/EcoDesman-${{ steps.version.outputs.full }}.aab"
-            aab_note="AAB was produced successfully."
+            cp build/app/outputs/bundle/release/app-release.aab "dist/EcoDesman-${{ steps.version.outputs.app }}.aab"
           fi
-          (cd dist && sha256sum * > "EcoDesman-${{ steps.version.outputs.full }}-sha256.txt")
-
-          signing_note="Release signing secrets were configured."
-          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] ||
-             [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] ||
-             [ -z "${ANDROID_KEY_ALIAS:-}" ] ||
-             [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then
-            signing_note="Release signing secrets were not configured; Android used the project's debug signing fallback."
-          fi
+          (cd dist && sha256sum * > "EcoDesman-${{ steps.version.outputs.app }}-sha256.txt")
 
           cat > release-notes.md <<EOF
-          ## EcoDesman Mobile ${{ steps.version.outputs.full }}
+          ## ЭкоВыхухоль ${{ steps.version.outputs.app }}
 
-          Android release artifacts built from \`pubspec.yaml\`.
+          В этом обновлении:
 
-          - Version: \`${{ steps.version.outputs.app }}\`
-          - Build: \`${{ steps.version.outputs.build }}\`
-          - API: \`${{ env.PRODUCTION_API_BASE_URL }}\`
-          - Signing: \`${signing_note}\`
-          - App bundle: \`${aab_note}\`
+          - справочные и правовые документы собраны в отдельной библиотеке;
+          - контакты оператора добавлены прямо в раздел справки;
+          - кнопки входа через внешние сервисы временно помечены как недоступные;
+          - реакции на публикации теперь нажимаются прямо на иконках лайка и избранного.
 
-          > [!IMPORTANT]
-          > APK is the required release artifact for direct installation. AAB is published when the Android toolchain can build it successfully.
+          Что скачать:
+
+          - APK — для установки приложения на Android напрямую;
+          - AAB — пакет для публикации в магазине приложений, если он есть в файлах релиза.
           EOF
 
       - name: Publish GitHub Release
@@ -158,12 +149,12 @@ jobs:
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
-              --title "EcoDesman Mobile ${{ steps.version.outputs.full }}" \
+              --title "ЭкоВыхухоль ${{ steps.version.outputs.app }}" \
               --notes-file release-notes.md \
               "${flags[@]}"
           else
             gh release create "$RELEASE_TAG" \
-              --title "EcoDesman Mobile ${{ steps.version.outputs.full }}" \
+              --title "ЭкоВыхухоль ${{ steps.version.outputs.app }}" \
               --notes-file release-notes.md \
               "${flags[@]}"
           fi

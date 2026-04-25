@@ -781,6 +781,8 @@ class _SocialAuthButtons extends StatelessWidget {
                 fullLabel: "ВКонтакте",
                 color: const Color(0xFF2787F5),
                 isBusy: isBusy,
+                isAvailable: false,
+                statusLabel: "Недоступно",
                 onPressed: () => onProviderSelected("vk"),
               ),
             ),
@@ -791,6 +793,8 @@ class _SocialAuthButtons extends StatelessWidget {
                 fullLabel: "Google",
                 color: const Color(0xFFD83B2D),
                 isBusy: isBusy,
+                isAvailable: false,
+                statusLabel: "Недоступно",
                 onPressed: () => onProviderSelected("google"),
               ),
             ),
@@ -802,6 +806,8 @@ class _SocialAuthButtons extends StatelessWidget {
                 color: const Color(0xFFF2C94C),
                 foregroundColor: const Color(0xFF20251F),
                 isBusy: isBusy,
+                isAvailable: false,
+                statusLabel: "Недоступно",
                 onPressed: () => onProviderSelected("yandex"),
               ),
             ),
@@ -818,6 +824,8 @@ class _SocialAuthButton extends StatelessWidget {
     required this.fullLabel,
     required this.color,
     required this.isBusy,
+    required this.isAvailable,
+    required this.statusLabel,
     required this.onPressed,
     this.foregroundColor = Colors.white,
   });
@@ -827,12 +835,16 @@ class _SocialAuthButton extends StatelessWidget {
   final Color color;
   final Color foregroundColor;
   final bool isBusy;
+  final bool isAvailable;
+  final String statusLabel;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return OutlinedButton(
-      onPressed: isBusy ? null : onPressed,
+      onPressed: isBusy || !isAvailable ? null : onPressed,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       ),
@@ -841,17 +853,37 @@ class _SocialAuthButton extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 15,
-            backgroundColor: color,
+            backgroundColor: isAvailable
+                ? color
+                : color.withValues(alpha: 0.24),
             child: Text(
               label,
               style: TextStyle(
-                color: foregroundColor,
+                color: isAvailable
+                    ? foregroundColor
+                    : theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w900,
               ),
             ),
           ),
           const SizedBox(height: 6),
-          FittedBox(child: Text(fullLabel)),
+          FittedBox(
+            child: Text(
+              fullLabel,
+              style: TextStyle(
+                decoration: isAvailable ? null : TextDecoration.lineThrough,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            statusLabel,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

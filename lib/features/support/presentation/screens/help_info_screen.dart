@@ -610,6 +610,14 @@ class _ContactBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rows = <String, String>{
+      if (contactBlock.operator.isNotEmpty) "Оператор": contactBlock.operator,
+      if (contactBlock.inn.isNotEmpty) "ИНН": contactBlock.inn,
+      if (contactBlock.ogrn.isNotEmpty) "ОГРН": contactBlock.ogrn,
+      if (contactBlock.address.isNotEmpty) "Адрес": contactBlock.address,
+      "Email": contactBlock.email,
+    };
+
     return Card(
       color: Colors.white,
       elevation: 0,
@@ -626,7 +634,21 @@ class _ContactBlock extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
-            Text(contactBlock.email),
+            for (final entry in rows.entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: "${entry.key}: ",
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(text: entry.value),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
