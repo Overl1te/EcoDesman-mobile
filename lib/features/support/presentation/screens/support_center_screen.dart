@@ -20,43 +20,65 @@ class SupportCenterScreen extends ConsumerStatefulWidget {
 }
 
 class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
-  final _botController = TextEditingController();
+  final _searchController = TextEditingController();
   Timer? _pollTimer;
 
   SupportKnowledgeResponse _knowledge = const SupportKnowledgeResponse.empty();
-  List<SupportThreadSummary> _threads = const [];
-  List<SupportReport> _reports = const [];
-  SupportBotReply? _botReply;
-
+  String _selectedCategory = "Аккаунт";
+  String _query = "";
   bool _isLoading = true;
-  bool _isBotBusy = false;
   String? _error;
-  String? _botError;
+
+  static const _categories = <_HelpCategory>[
+    _HelpCategory(
+      id: "Аккаунт",
+      title: "Аккаунт",
+      description: "Вход, профиль и доступ.",
+      icon: Icons.person_outline,
+    ),
+    _HelpCategory(
+      id: "Карта",
+      title: "Карта",
+      description: "Точки, адреса и геолокация.",
+      icon: Icons.map_outlined,
+    ),
+    _HelpCategory(
+      id: "Отзывы",
+      title: "Отзывы",
+      description: "Публикация, фото и оценки.",
+      icon: Icons.rate_review_outlined,
+    ),
+    _HelpCategory(
+      id: "Прочее",
+      title: "Прочее",
+      description: "Уведомления и другие вопросы.",
+      icon: Icons.help_outline,
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(_bootstrap);
+    _searchController.addListener(() {
+      setState(() {
+        _query = _searchController.text.trim().toLowerCase();
+      });
+    });
+    Future.microtask(_loadKnowledge);
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => _loadKnowledge(silent: true),
+    );
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
-    _botController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    await _loadData();
-    _pollTimer = Timer.periodic(const Duration(seconds: 25), (_) {
-      _loadData(silent: true);
-    });
-  }
-
-  Future<void> _loadData({bool silent = false}) async {
-    final authState = ref.read(authControllerProvider);
-    final canAccessSupport = authState.user?.canAccessSupport ?? false;
-
+  Future<void> _loadKnowledge({bool silent = false}) async {
     if (!silent && mounted) {
       setState(() {
         _isLoading = true;
@@ -65,26 +87,14 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
     }
 
     try {
-      final repository = ref.read(supportRepositoryProvider);
-      final knowledge = await repository.fetchKnowledge();
-      var threads = const <SupportThreadSummary>[];
-      var reports = const <SupportReport>[];
-
-      if (authState.isAuthenticated) {
-        threads = await repository.fetchThreads(teamView: canAccessSupport);
-        if (canAccessSupport) {
-          reports = await repository.fetchTeamReports();
-        }
-      }
-
+      final knowledge = await ref
+          .read(supportRepositoryProvider)
+          .fetchKnowledge();
       if (!mounted) {
         return;
       }
-
       setState(() {
         _knowledge = knowledge;
-        _threads = threads;
-        _reports = reports;
         _isLoading = false;
         _error = null;
       });
@@ -102,45 +112,29 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
     }
   }
 
-  Future<void> _askBot([String? prompt]) async {
-    final query = (prompt ?? _botController.text).trim();
-    if (query.length < 2) {
-      return;
-    }
-
-    setState(() {
-      _isBotBusy = true;
-      _botError = null;
-    });
-
-    try {
-      final reply = await ref.read(supportRepositoryProvider).askBot(query);
-      if (!mounted) {
-        return;
+  List<SupportKnowledgeEntry> get _filteredArticles {
+    return _knowledge.faq.where((entry) {
+      if (entry.category != _selectedCategory) {
+        return false;
       }
-      setState(() {
-        _botReply = reply;
-        _botController.text = query;
-        _isBotBusy = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
+      if (_query.isEmpty) {
+        return true;
       }
-      setState(() {
-        _isBotBusy = false;
-        _botError = humanizeNetworkError(
-          error,
-          fallback: "Не удалось получить ответ мини-бота",
-        );
-      });
-    }
+      final haystack = [
+        entry.title,
+        entry.answer,
+        entry.category,
+        ...entry.keywords,
+      ].join(" ").toLowerCase();
+      return haystack.contains(_query);
+    }).toList();
   }
 
-  Future<void> _openCreateThreadSheet() async {
+  Future<void> _openCreateThreadSheet([SupportKnowledgeEntry? article]) async {
     final authState = ref.read(authControllerProvider);
     if (!authState.isAuthenticated) {
       _showSnack("Войдите, чтобы написать в поддержку");
+      context.push("/login");
       return;
     }
 
@@ -149,7 +143,7 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => const _CreateThreadSheet(),
+      builder: (_) => _CreateThreadSheet(article: article),
     );
 
     if (input == null) {
@@ -167,10 +161,6 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
       if (!mounted) {
         return;
       }
-      await _loadData(silent: true);
-      if (!mounted) {
-        return;
-      }
       context.push("/profile/support/thread/${thread.id}");
     } catch (error) {
       _showSnack(
@@ -180,47 +170,7 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
     }
   }
 
-  Future<void> _moderateReport(SupportReport report) async {
-    final authState = ref.read(authControllerProvider);
-    if (!(authState.user?.canAccessSupport ?? false)) {
-      return;
-    }
-
-    final input = await showModalBottomSheet<_ReportModerationInput>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (_) => _ReportModerationSheet(report: report),
-    );
-
-    if (input == null) {
-      return;
-    }
-
-    try {
-      await ref
-          .read(supportRepositoryProvider)
-          .updateReport(
-            reportId: report.id,
-            status: input.status,
-            resolutionNote: input.resolutionNote,
-            removeTarget: input.removeTarget,
-          );
-      await _loadData(silent: true);
-      if (!mounted) {
-        return;
-      }
-      _showSnack("Жалоба обновлена");
-    } catch (error) {
-      _showSnack(
-        humanizeNetworkError(error, fallback: "Не удалось обновить жалобу"),
-        isError: true,
-      );
-    }
-  }
-
-  void _showKnowledgeEntry(SupportKnowledgeEntry entry) {
+  void _showArticle(SupportKnowledgeEntry entry) {
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -228,9 +178,16 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
           title: Text(entry.title),
           content: SingleChildScrollView(child: Text(entry.answer)),
           actions: [
-            FilledButton(
+            TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Понятно"),
+              child: const Text("Закрыть"),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _openCreateThreadSheet(entry);
+              },
+              child: const Text("Не помогло? Написать"),
             ),
           ],
         );
@@ -252,282 +209,127 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authControllerProvider);
-    final user = authState.user;
-    final canAccessSupport = user?.canAccessSupport ?? false;
-    final unreadCount = _threads.fold<int>(
-      0,
-      (sum, item) => sum + item.unreadCount,
-    );
-    final openCount = _threads.where((item) => item.status != "closed").length;
-    final newReportsCount = _reports
-        .where((item) => item.status == "new")
-        .length;
+    final theme = Theme.of(context);
+    final articles = _filteredArticles;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F8F4),
       appBar: AppBar(
-        title: const Text("Справка и помощь"),
+        title: const Text("Помощь"),
         actions: [
           IconButton(
-            onPressed: () => _loadData(),
-            icon: const Icon(Icons.refresh),
-            tooltip: "Обновить",
+            onPressed: () => context.push("/profile/support/requests"),
+            icon: const Icon(Icons.forum_outlined),
+            tooltip: "Мои обращения",
           ),
         ],
       ),
-      floatingActionButton: authState.isAuthenticated
-          ? FloatingActionButton.extended(
-              onPressed: _openCreateThreadSheet,
-              icon: const Icon(Icons.support_agent_outlined),
-              label: const Text("Новое обращение"),
-            )
-          : null,
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: _loadKnowledge,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
           children: [
+            Text(
+              "Помощь",
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                height: 1.05,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Ответы на вопросы и поддержка пользователей",
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: "Опишите проблему или вопрос",
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _openCreateThreadSheet(),
+                icon: const Icon(Icons.support_agent_outlined),
+                label: const Text("Написать в поддержку"),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => context.push("/profile/support/requests"),
+              icon: const Icon(Icons.forum_outlined),
+              label: const Text("Мои обращения"),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              "Категории",
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (final category in _categories)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _CategoryTile(
+                  category: category,
+                  active: category.id == _selectedCategory,
+                  onTap: () {
+                    setState(() {
+                      _selectedCategory = category.id;
+                    });
+                  },
+                ),
+              ),
+            const SizedBox(height: 14),
+            Text(
+              "Статьи",
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
             if (_isLoading)
               const Padding(
-                padding: EdgeInsets.only(top: 120),
+                padding: EdgeInsets.only(top: 48),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else ...[
-              if (_error != null) ...[
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.error_outline),
-                    title: const Text("Раздел помощи временно недоступен"),
-                    subtitle: Text(_error!),
+            else if (_error != null)
+              AppEmptyState(
+                title: "Раздел помощи временно недоступен",
+                message: _error!,
+              )
+            else if (articles.isEmpty)
+              _EmptyActionState(
+                title: "Ничего не найдено",
+                message: "Попробуйте другой запрос или напишите нам.",
+                actionLabel: "Написать в поддержку",
+                onAction: () => _openCreateThreadSheet(),
+              )
+            else
+              for (final entry in articles)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ArticleTile(
+                    entry: entry,
+                    onOpen: () => _showArticle(entry),
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              _HeroStats(
-                unreadCount: unreadCount,
-                openCount: openCount,
-                newReportsCount: newReportsCount,
-                canAccessSupport: canAccessSupport,
-              ),
-              const SizedBox(height: 20),
-              _SectionTitle(
-                title: authState.isAuthenticated
-                    ? (canAccessSupport ? "Очередь поддержки" : "Мои обращения")
-                    : "Частые проблемы",
-                actionLabel: authState.isAuthenticated ? "Создать чат" : null,
-                onAction: authState.isAuthenticated
-                    ? _openCreateThreadSheet
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              if (!authState.isAuthenticated)
-                Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.login)),
-                    title: const Text("Войдите, чтобы писать в поддержку"),
-                    subtitle: const Text(
-                      "После входа появятся ваши чаты, история обращений и статусы жалоб.",
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.go("/login"),
-                  ),
-                )
-              else if (_threads.isEmpty)
-                const AppEmptyState(
-                  title: "Пока нет обращений",
-                  message:
-                      "Создайте первый чат с техподдержкой прямо из этого раздела.",
-                )
-              else
-                ..._threads.map(
-                  (thread) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _ThreadCard(
-                      thread: thread,
-                      canAccessSupport: canAccessSupport,
-                      onTap: () =>
-                          context.push("/profile/support/thread/${thread.id}"),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-              _SectionTitle(title: "Мини-бот"),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Опишите проблему, и бот подскажет подходящий FAQ или предложит открыть чат.",
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: _botController,
-                        minLines: 2,
-                        maxLines: 4,
-                        textCapitalization: TextCapitalization.sentences,
-                        decoration: const InputDecoration(
-                          labelText: "Вопрос боту",
-                          hintText: "Например: не вижу уведомления по жалобе",
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _knowledge.suggestedPrompts
-                            .map(
-                              (prompt) => ActionChip(
-                                label: Text(prompt),
-                                onPressed: () => _askBot(prompt),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.icon(
-                          onPressed: _isBotBusy ? null : () => _askBot(),
-                          icon: _isBotBusy
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.smart_toy_outlined),
-                          label: Text(_isBotBusy ? "Думаем..." : "Спросить"),
-                        ),
-                      ),
-                      if (_botError != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _botError!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      if (_botReply != null) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _botReply!.reply,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodyMedium?.copyWith(height: 1.45),
-                              ),
-                              if (_botReply!.matchedArticle != null) ...[
-                                const SizedBox(height: 10),
-                                ActionChip(
-                                  label: Text(_botReply!.matchedArticle!.title),
-                                  onPressed: () => _showKnowledgeEntry(
-                                    _botReply!.matchedArticle!,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              if (canAccessSupport) ...[
-                const SizedBox(height: 24),
-                _SectionTitle(title: "Жалобы на модерации"),
-                const SizedBox(height: 12),
-                if (_reports.isEmpty)
-                  const AppEmptyState(
-                    title: "Новых жалоб нет",
-                    message:
-                        "Когда пользователи пожалуются на посты, комментарии или отзывы на карте, они появятся здесь.",
-                  )
-                else
-                  ..._reports.map(
-                    (report) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ReportCard(
-                        report: report,
-                        onTap: () => _moderateReport(report),
-                      ),
-                    ),
-                  ),
-              ],
-              const SizedBox(height: 24),
-              _SectionTitle(title: "FAQ и частые проблемы"),
-              const SizedBox(height: 12),
-              if (_knowledge.featured.isNotEmpty) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _knowledge.featured
-                      .map(
-                        (entry) => ActionChip(
-                          label: Text(entry.title),
-                          onPressed: () => _showKnowledgeEntry(entry),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (_knowledge.faq.isEmpty)
-                const AppEmptyState(
-                  title: "Справка пока пустая",
-                  message:
-                      "FAQ появится здесь, как только мы добавим материалы.",
-                )
-              else
-                ..._knowledge.faq.map(
-                  (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      child: ExpansionTile(
-                        title: Text(entry.title),
-                        subtitle: Text(entry.category),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          16,
-                          0,
-                          16,
-                          16,
-                        ),
-                        children: [
-                          Text(
-                            entry.answer,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.copyWith(height: 1.45),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
           ],
         ),
       ),
@@ -535,324 +337,327 @@ class _SupportCenterScreenState extends ConsumerState<SupportCenterScreen> {
   }
 }
 
-class _HeroStats extends StatelessWidget {
-  const _HeroStats({
-    required this.unreadCount,
-    required this.openCount,
-    required this.newReportsCount,
-    required this.canAccessSupport,
+class SupportRequestsScreen extends ConsumerStatefulWidget {
+  const SupportRequestsScreen({super.key});
+
+  @override
+  ConsumerState<SupportRequestsScreen> createState() =>
+      _SupportRequestsScreenState();
+}
+
+class _SupportRequestsScreenState extends ConsumerState<SupportRequestsScreen> {
+  List<SupportThreadSummary> _threads = const [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_loadThreads);
+  }
+
+  Future<void> _loadThreads() async {
+    final authState = ref.read(authControllerProvider);
+    if (!authState.isAuthenticated) {
+      setState(() {
+        _threads = const [];
+        _isLoading = false;
+        _error = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final threads = await ref
+          .read(supportRepositoryProvider)
+          .fetchThreads(teamView: authState.user?.canAccessSupport ?? false);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _threads = threads;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _error = humanizeNetworkError(
+          error,
+          fallback: "Не удалось загрузить обращения",
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8F4),
+      appBar: AppBar(title: const Text("Мои обращения")),
+      body: RefreshIndicator(
+        onRefresh: _loadThreads,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            if (!authState.isAuthenticated)
+              _EmptyActionState(
+                title: "Нужен вход",
+                message:
+                    "Войдите, чтобы видеть историю обращений и ответы поддержки.",
+                actionLabel: "Войти",
+                onAction: () => context.push("/login"),
+              )
+            else if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.only(top: 80),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              AppEmptyState(
+                title: "Не удалось загрузить обращения",
+                message: _error!,
+              )
+            else if (_threads.isEmpty)
+              _EmptyActionState(
+                title: "У вас пока нет обращений",
+                message: "Попробуйте найти ответ в помощи или напишите нам.",
+                actionLabel: "К помощи",
+                onAction: () => context.go("/profile/support"),
+              )
+            else
+              for (final thread in _threads)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ThreadTile(
+                    thread: thread,
+                    onTap: () =>
+                        context.push("/profile/support/thread/${thread.id}"),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HelpCategory {
+  const _HelpCategory({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.icon,
   });
 
-  final int unreadCount;
-  final int openCount;
-  final int newReportsCount;
-  final bool canAccessSupport;
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+}
+
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({
+    required this.category,
+    required this.active,
+    required this.onTap,
+  });
+
+  final _HelpCategory category;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: active ? primary : Colors.black.withValues(alpha: 0.06),
+            ),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: primary.withValues(alpha: 0.12),
+                child: Icon(category.icon, color: primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      category.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArticleTile extends StatelessWidget {
+  const _ArticleTile({required this.entry, required this.onOpen});
+
+  final SupportKnowledgeEntry entry;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              entry.title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _shortAnswer(entry.answer),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: onOpen,
+                child: const Text("Открыть"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThreadTile extends StatelessWidget {
+  const _ThreadTile({required this.thread, required this.onTap});
+
+  final SupportThreadSummary thread;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ListTile(
+        onTap: onTap,
+        title: Text(
+          thread.subject,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          thread.lastMessagePreview.isNotEmpty
+              ? thread.lastMessagePreview
+              : "Пока без сообщений",
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              getSupportThreadStatusLabel(thread.status),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              formatPostDate(thread.lastMessageAt.toLocal()),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyActionState extends StatelessWidget {
+  const _EmptyActionState({
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _StatCard(
-                title: "Непрочитанные",
-                value: "$unreadCount",
-                icon: Icons.mark_chat_unread_outlined,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _StatCard(
-                title: "Открытые чаты",
-                value: "$openCount",
-                icon: Icons.forum_outlined,
-              ),
-            ),
-          ],
-        ),
-        if (canAccessSupport) ...[
-          const SizedBox(height: 12),
-          _StatCard(
-            title: "Новые жалобы",
-            value: "$newReportsCount",
-            icon: Icons.flag_outlined,
-          ),
-        ],
+        AppEmptyState(title: title, message: message),
+        FilledButton(onPressed: onAction, child: Text(actionLabel)),
       ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-  });
-
-  final String title;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Icon(icon, color: theme.colorScheme.onPrimaryContainer),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.actionLabel, this.onAction});
-
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-          ),
-        ),
-        if (actionLabel != null && onAction != null)
-          TextButton.icon(
-            onPressed: onAction,
-            icon: const Icon(Icons.add_comment_outlined),
-            label: Text(actionLabel!),
-          ),
-      ],
-    );
-  }
-}
-
-class _ThreadCard extends StatelessWidget {
-  const _ThreadCard({
-    required this.thread,
-    required this.canAccessSupport,
-    required this.onTap,
-  });
-
-  final SupportThreadSummary thread;
-  final bool canAccessSupport;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          thread.subject,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            Chip(
-                              label: Text(
-                                getSupportThreadCategoryLabel(thread.category),
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              side: BorderSide.none,
-                            ),
-                            Chip(
-                              label: Text(
-                                getSupportThreadStatusLabel(thread.status),
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              side: BorderSide.none,
-                              backgroundColor: thread.status == "closed"
-                                  ? theme.colorScheme.surfaceContainerHighest
-                                  : theme.colorScheme.secondaryContainer,
-                            ),
-                            if (thread.hasUnread)
-                              Chip(
-                                label: Text("Новых: ${thread.unreadCount}"),
-                                visualDensity: VisualDensity.compact,
-                                side: BorderSide.none,
-                                backgroundColor:
-                                    theme.colorScheme.primaryContainer,
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    Icons.chevron_right,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                thread.lastMessagePreview,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                canAccessSupport
-                    ? "Автор: ${thread.createdBy.displayName}"
-                    : "Обновлено ${formatPostDate(thread.lastMessageAt.toLocal())}",
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (canAccessSupport && thread.assignedTo != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  "Назначено: ${thread.assignedTo!.displayName}",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReportCard extends StatelessWidget {
-  const _ReportCard({required this.report, required this.onTap});
-
-  final SupportReport report;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      report.targetLabel,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Chip(
-                    label: Text(getSupportReportStatusLabel(report.status)),
-                    visualDensity: VisualDensity.compact,
-                    side: BorderSide.none,
-                    backgroundColor: report.status == "new"
-                        ? theme.colorScheme.errorContainer
-                        : theme.colorScheme.secondaryContainer,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(
-                    label: Text(getSupportReportTargetLabel(report.targetType)),
-                    visualDensity: VisualDensity.compact,
-                    side: BorderSide.none,
-                  ),
-                  Chip(
-                    label: Text(getSupportReportReasonLabel(report.reason)),
-                    visualDensity: VisualDensity.compact,
-                    side: BorderSide.none,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                report.details.isNotEmpty
-                    ? report.details
-                    : "Без дополнительных деталей",
-                style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "Отправил: ${report.reporter.displayName} · ${formatPostDate(report.createdAt.toLocal())}",
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -870,7 +675,9 @@ class _CreateThreadInput {
 }
 
 class _CreateThreadSheet extends StatefulWidget {
-  const _CreateThreadSheet();
+  const _CreateThreadSheet({this.article});
+
+  final SupportKnowledgeEntry? article;
 
   @override
   State<_CreateThreadSheet> createState() => _CreateThreadSheetState();
@@ -878,15 +685,41 @@ class _CreateThreadSheet extends StatefulWidget {
 
 class _CreateThreadSheetState extends State<_CreateThreadSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _subjectController = TextEditingController();
-  final _bodyController = TextEditingController();
+  late final TextEditingController _subjectController;
+  late final TextEditingController _bodyController;
   String _category = "general";
+
+  @override
+  void initState() {
+    super.initState();
+    final article = widget.article;
+    _subjectController = TextEditingController(text: article?.title ?? "");
+    _bodyController = TextEditingController(
+      text: article == null
+          ? ""
+          : "Не помогла статья «${article.title}».\n\nЧто именно не работает:",
+    );
+    _category = _categoryFromArticle(article);
+  }
 
   @override
   void dispose() {
     _subjectController.dispose();
     _bodyController.dispose();
     super.dispose();
+  }
+
+  String _categoryFromArticle(SupportKnowledgeEntry? article) {
+    switch (article?.category) {
+      case "Аккаунт":
+        return "account";
+      case "Карта":
+        return "map";
+      case "Отзывы":
+        return "content";
+      default:
+        return "general";
+    }
   }
 
   void _submit() {
@@ -916,21 +749,25 @@ class _CreateThreadSheetState extends State<_CreateThreadSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Новое обращение",
+              "Написать в поддержку",
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Опишите проблему коротко: где были, что сделали и что пошло не так.",
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               initialValue: _category,
               decoration: const InputDecoration(labelText: "Категория"),
               items: const [
-                DropdownMenuItem(value: "general", child: Text("Общее")),
+                DropdownMenuItem(value: "general", child: Text("Прочее")),
                 DropdownMenuItem(value: "account", child: Text("Аккаунт")),
-                DropdownMenuItem(value: "content", child: Text("Контент")),
+                DropdownMenuItem(value: "content", child: Text("Отзывы")),
                 DropdownMenuItem(value: "map", child: Text("Карта")),
-                DropdownMenuItem(value: "report", child: Text("Жалоба")),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -959,8 +796,7 @@ class _CreateThreadSheetState extends State<_CreateThreadSheet> {
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: "Сообщение",
-                hintText:
-                    "Опишите проблему, шаги воспроизведения и что уже пробовали.",
+                hintText: "Опишите проблему, шаги и что уже пробовали.",
                 alignLabelWithHint: true,
               ),
               validator: (value) {
@@ -976,7 +812,7 @@ class _CreateThreadSheetState extends State<_CreateThreadSheet> {
               child: FilledButton.icon(
                 onPressed: _submit,
                 icon: const Icon(Icons.send_outlined),
-                label: const Text("Открыть чат"),
+                label: const Text("Написать в поддержку"),
               ),
             ),
           ],
@@ -986,119 +822,11 @@ class _CreateThreadSheetState extends State<_CreateThreadSheet> {
   }
 }
 
-class _ReportModerationInput {
-  const _ReportModerationInput({
-    required this.status,
-    required this.resolutionNote,
-    required this.removeTarget,
-  });
-
-  final String status;
-  final String resolutionNote;
-  final bool removeTarget;
-}
-
-class _ReportModerationSheet extends StatefulWidget {
-  const _ReportModerationSheet({required this.report});
-
-  final SupportReport report;
-
-  @override
-  State<_ReportModerationSheet> createState() => _ReportModerationSheetState();
-}
-
-class _ReportModerationSheetState extends State<_ReportModerationSheet> {
-  final _noteController = TextEditingController();
-  String _status = "in_review";
-  bool _removeTarget = false;
-
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
+String _shortAnswer(String answer) {
+  final parts = answer.split(RegExp(r"(?<=[.!?])\s+"));
+  final sentence = parts.isEmpty ? answer : parts.first;
+  if (sentence.length <= 120) {
+    return sentence;
   }
-
-  void _submit() {
-    Navigator.of(context).pop(
-      _ReportModerationInput(
-        status: _status,
-        resolutionNote: _noteController.text.trim(),
-        removeTarget: _removeTarget,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Модерация жалобы",
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          Text(widget.report.targetLabel),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _status,
-            decoration: const InputDecoration(labelText: "Статус"),
-            items: const [
-              DropdownMenuItem(value: "in_review", child: Text("В работе")),
-              DropdownMenuItem(value: "resolved", child: Text("Решено")),
-              DropdownMenuItem(value: "rejected", child: Text("Отклонено")),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _status = value;
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _noteController,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: "Комментарий для чата",
-              hintText: "Эта заметка отправится в историю обращения.",
-              alignLabelWithHint: true,
-            ),
-          ),
-          const SizedBox(height: 10),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _removeTarget,
-            title: const Text("Удалить контент-цель"),
-            subtitle: const Text(
-              "Используйте, если жалоба подтверждена и контент должен исчезнуть.",
-            ),
-            onChanged: (value) {
-              setState(() {
-                _removeTarget = value ?? false;
-              });
-            },
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _submit,
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text("Сохранить решение"),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  return "${sentence.substring(0, 117).trim()}...";
 }

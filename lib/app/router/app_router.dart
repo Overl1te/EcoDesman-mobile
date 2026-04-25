@@ -76,6 +76,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SupportCenterScreen(),
       ),
       GoRoute(
+        path: "/profile/support/requests",
+        builder: (context, state) => const SupportRequestsScreen(),
+      ),
+      GoRoute(
         path: "/profile/support/thread/:threadId",
         builder: (context, state) {
           final threadId = int.parse(state.pathParameters["threadId"]!);

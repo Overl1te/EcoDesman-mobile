@@ -742,13 +742,13 @@ String getSupportThreadCategoryLabel(String value) {
     case "account":
       return "Аккаунт";
     case "content":
-      return "Контент";
+      return "Отзывы";
     case "map":
       return "Карта";
     case "report":
       return "Жалоба";
     default:
-      return "Общее";
+      return "Прочее";
   }
 }
 
